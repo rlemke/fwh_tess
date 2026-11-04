@@ -78,6 +78,7 @@ def _search_one(
 def _result_from_dict(d: dict[str, Any]) -> sr.SearchResult:
     d = dict(d)
     d["signals"] = [sr.Signal(**s) for s in d["signals"]]
+    d["vetoes"] = [sr.Veto(**v) for v in d.get("vetoes", [])]
     return sr.SearchResult(**d)
 
 

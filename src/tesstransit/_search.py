@@ -42,6 +42,15 @@ class SearchConfig:
     # ~24 d; the 13 d cap excluded 33 of the 87 pilot TCEs).
     min_transits: int = 2
     max_peaks_tried: int = 500
+    # Per-transit consistency. A real transit has a similar depth in every
+    # event; an instrumental dip is usually ONE strong event plus noise, which
+    # BLS still folds into a "periodic" signal. So the events other than the
+    # strongest must, on their own, show the dip at >= this SNR -- with each
+    # event's uncertainty from the scatter of the flux binned to the transit
+    # duration, which includes red noise (Pont et al. 2006). A vetoed peak's
+    # strongest event is masked and the star searched again.
+    min_snr_without_strongest: float = 3.0
+    max_vetoes: int = 5
     # Running-median width as a fraction of the period grid, so the detrended
     # SDE does not depend on how many trials the grid has (1001 of 24000).
     power_detrend_frac: float = 0.042  # candidates checked for min_transits, best first
@@ -99,6 +108,22 @@ class Signal:
     snr: float  # depth / depth uncertainty, from BLS with the measured scatter
     sde: float  # (peak - mean) / std of the periodogram
     n_transits: int  # transits with in-transit data
+    snr_red: float | None = None  # combined per-event SNR, red-noise uncertainties
+    snr_without_strongest: float | None = None  # the same, strongest event left out
+
+
+@dataclass
+class Veto:
+    """A peak that cleared the thresholds but failed per-transit consistency."""
+
+    period_days: float
+    epoch_btjd: float
+    duration_hours: float
+    snr: float
+    sde: float
+    snr_red: float
+    snr_without_strongest: float
+    strongest_event_btjd: float  # masked before searching again
 
 
 @dataclass
@@ -110,9 +135,16 @@ class SearchResult:
     scatter_ppm: float  # robust (MAD) scatter of the detrended flux
     signals: list[Signal] = field(default_factory=list)
     # "below_threshold" | "max_signals" | "too_few_points" | "no_multi_transit_peak"
+    # | "max_vetoes"
     stop_reason: str = ""
-    final_snr: float | None = None  # the peak that did NOT clear the thresholds
+    # The strongest peak that did NOT clear the thresholds: how close the search
+    # came, and WHERE -- so a missed TCE can be told apart as "found at its
+    # period but rejected" from "never the strongest peak".
+    final_snr: float | None = None
     final_sde: float | None = None
+    final_period_days: float | None = None
+    final_epoch_btjd: float | None = None
+    vetoes: list[Veto] = field(default_factory=list)
 
 
 def running_median(
@@ -201,6 +233,76 @@ def _n_transits(t: np.ndarray, period: float, epoch: float, duration: float) -> 
     return len(np.unique(np.round((t[in_tr] - epoch) / period)))
 
 
+@dataclass
+class EventStats:
+    depths: np.ndarray  # per-event depth (fraction), one per transit with data
+    sigmas: np.ndarray  # per-event uncertainty (red-noise aware)
+    centres: np.ndarray  # per-event mid-time, BTJD
+    snr_red: float
+    snr_without_strongest: float
+    strongest: int  # index into the arrays above
+
+
+def binned_scatter(t: np.ndarray, f: np.ndarray, width: float) -> float:
+    """Robust std of ``f`` averaged in time bins of ``width`` (half-full bins kept).
+
+    For white noise this is sigma/sqrt(n per bin); red noise makes it larger,
+    which is exactly the uncertainty a transit-length average really has.
+    """
+    idx = np.floor((t - t[0]) / width).astype(int)
+    counts = np.bincount(idx)
+    sums = np.bincount(idx, weights=f)
+    full = counts >= 0.5 * counts.max()
+    means = sums[full] / counts[full]
+    if len(means) < 5:
+        raise ValueError(f"only {len(means)} usable bins of {width:.3f} d")
+    return float(1.4826 * np.median(np.abs(means - np.median(means))))
+
+
+def event_stats(
+    t: np.ndarray, f: np.ndarray, period: float, epoch: float, duration: float
+) -> EventStats:
+    """Per-transit depths and the consistency statistics built from them."""
+    phase = (t - epoch + 0.5 * period) % period - 0.5 * period
+    in_tr = np.abs(phase) < duration / 2.0
+    sigma_dur = binned_scatter(t[~in_tr], f[~in_tr], duration)
+    k = np.round((t - epoch) / period).astype(int)
+    events = np.unique(k[in_tr])
+    cadence = float(np.median(np.diff(t)))
+    n_full = max(1.0, duration / cadence)
+    # Depth against the out-of-transit MEAN, as BLS measures it -- not against
+    # 1.0. After a signal is masked, a variable star's remaining flux does not
+    # sit at 1, and measuring from 1 scored a strong EB peak (TIC 149308175)
+    # at per-event SNR -16 and vetoed it.
+    baseline = float(np.mean(f[~in_tr]))
+    depths, sigmas, centres = [], [], []
+    for e in events:
+        sel = in_tr & (k == e)
+        n = sel.sum()
+        depths.append(baseline - float(np.mean(f[sel])))
+        sigmas.append(sigma_dur * np.sqrt(max(1.0, n_full / n)))
+        centres.append(epoch + e * period)
+    d, sg = np.array(depths), np.array(sigmas)
+
+    def combined(mask: np.ndarray) -> float:
+        if not mask.any():
+            return 0.0
+        w = 1.0 / sg[mask] ** 2
+        return float(np.sum(d[mask] * w) / np.sum(w) * np.sqrt(np.sum(w)))
+
+    strongest = int(np.argmax(d / sg))
+    rest = np.ones(len(d), dtype=bool)
+    rest[strongest] = False
+    return EventStats(
+        depths=d,
+        sigmas=sg,
+        centres=np.array(centres),
+        snr_red=combined(np.ones(len(d), dtype=bool)),
+        snr_without_strongest=combined(rest),
+        strongest=strongest,
+    )
+
+
 def _best_with_transits(
     t: np.ndarray,
     power: np.ndarray,
@@ -276,20 +378,40 @@ def search(
             return result
         snr = float(res["depth_snr"][i])
         sde = float(power[i])
+        p, t0, dur = (
+            float(res["period"][i]),
+            float(res["transit_time"][i]),
+            float(res["duration"][i]),
+        )
         if (
             snr < cfg.snr_threshold
             or sde < cfg.sde_threshold
             or not res["depth"][i] > 0
         ):
             result.stop_reason = "below_threshold"
-            result.final_snr = snr
-            result.final_sde = sde
+            result.final_snr, result.final_sde = snr, sde
+            result.final_period_days, result.final_epoch_btjd = p, t0
             return result
-        p, t0, dur = (
-            float(res["period"][i]),
-            float(res["transit_time"][i]),
-            float(res["duration"][i]),
-        )
+        ev = event_stats(t, f, p, t0, dur)
+        if ev.snr_without_strongest < cfg.min_snr_without_strongest:
+            centre = float(ev.centres[ev.strongest])
+            result.vetoes.append(
+                Veto(
+                    p,
+                    t0,
+                    dur * 24.0,
+                    snr,
+                    sde,
+                    ev.snr_red,
+                    ev.snr_without_strongest,
+                    centre,
+                )
+            )
+            if len(result.vetoes) > cfg.max_vetoes:
+                result.stop_reason = "max_vetoes"
+                return result
+            keep &= np.abs(time - centre) >= cfg.mask_width_factor * dur / 2.0
+            continue
         result.signals.append(
             Signal(
                 rank=len(result.signals) + 1,
@@ -299,7 +421,9 @@ def search(
                 depth_ppm=float(res["depth"][i]) * 1e6,
                 snr=snr,
                 sde=sde,
-                n_transits=_n_transits(t, p, t0, dur),
+                n_transits=len(ev.depths),
+                snr_red=ev.snr_red,
+                snr_without_strongest=ev.snr_without_strongest,
             )
         )
         if len(result.signals) >= cfg.max_signals:

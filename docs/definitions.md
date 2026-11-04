@@ -59,6 +59,8 @@ the exact search that produced it.
 | `snr_threshold` | 7.1 | Minimum `snr` to report a signal. Numerically SPOC's MES threshold; **not the same statistic**. |
 | `sde_threshold` | 11.0 | Minimum `sde` to report a signal. ⚠️ Provisional (see §2.3). |
 | `max_signals` | 3 | Stop after this many signals per star. |
+| `min_snr_without_strongest` | 3.0 | Per-transit consistency veto: the events OTHER than the strongest must, on their own, show the dip at ≥ this SNR (red-noise uncertainties, §2.6). Catches one strong dip folded with noise into a "periodic" signal. |
+| `max_vetoes` | 5 | Stop after this many vetoed peaks per star (`max_vetoes`). |
 | `mask_width_factor` | 1.5 | After a signal is found, mask this many durations around each of its transits before searching again. |
 
 ### 2.2 `Signal` — one thing our search found
@@ -73,6 +75,8 @@ the exact search that produced it.
 | `snr` | — | Depth ÷ its uncertainty, with the uncertainty from the measured scatter. |
 | `sde` | — | Signal Detection Efficiency, on the **detrended** periodogram: (power − running median of power) ÷ robust std. How far the peak stands above nearby trials. |
 | `n_transits` | — | Transits that have in-transit data (gaps can hide some). |
+| `snr_red` | — | Combined SNR of the per-event depths, each with a red-noise uncertainty (§2.6). Usually well below `snr`, which assumes white noise. |
+| `snr_without_strongest` | — | The same with the strongest event left out. |
 
 ### 2.3 Why both `snr` and `sde` — and why `sde` is detrended
 
@@ -100,13 +104,26 @@ set the real false-alarm floor. Both thresholds are open.
 | `signals` | The `Signal`s, in `rank` order. |
 | `stop_reason` | Why the search stopped — see below. |
 | `final_snr`, `final_sde` | The strongest peak that did **not** clear the thresholds. How close the search came to finding something more. |
+| `final_period_days`, `final_epoch_btjd` | Where that peak was — so a missed TCE can be told apart as "found at its period but rejected" from "never the strongest peak". |
+| `vetoes` | Peaks that cleared the thresholds but failed the per-transit veto: period, epoch, duration, `snr`, `sde`, `snr_red`, `snr_without_strongest`, and `strongest_event_btjd` (the event masked before searching again). |
 
 | `stop_reason` | Meaning |
 |---|---|
 | `below_threshold` | The next-strongest peak failed `snr_threshold` or `sde_threshold`. The normal ending. |
 | `max_signals` | `max_signals` reached; there may be more to find. |
 | `too_few_points` | Masking left fewer than 100 cadences. |
+| `max_vetoes` | More than `max_vetoes` peaks were vetoed. |
 | `no_multi_transit_peak` | None of the `max_peaks_tried` strongest peaks had `min_transits` transits with data. |
+
+### 2.6 Per-event depths and red noise
+
+For a signal (P, epoch, duration), each transit with data gets a depth — the
+out-of-transit **mean** minus the in-transit mean, as BLS measures it — and an
+uncertainty: the robust scatter of the out-of-transit flux **averaged in bins
+one duration wide** (scaled up for a partially covered event). For white noise
+that is σ/√n; correlated (red) noise makes it larger, which is the uncertainty
+a transit-length average really has (Pont, Zucker & Queloz 2006). Events are
+combined inverse-variance weighted into `snr_red`.
 
 ### 2.5 Light-curve mask counts
 

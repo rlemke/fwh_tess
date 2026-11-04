@@ -336,3 +336,60 @@ def test_single_transit_is_never_reported_as_periodic():
     t, f = _sector(planets=[(40.0, 1335.0, 5.0, 1500.0)])
     for s in sr.search(t, f, 42, 1, FAST).signals:
         assert s.n_transits >= 2
+
+
+# --- per-transit consistency -------------------------------------------------
+
+
+def test_binned_scatter_sees_red_noise():
+    rng = np.random.default_rng(3)
+    t = np.arange(0, 20, 2 / 1440)
+    white = rng.normal(0, 1e-3, len(t))
+    red = white + 5e-4 * np.sin(2 * np.pi * t / 0.3)  # structure on transit timescales
+    w = sr.binned_scatter(t, white, 3 / 24)
+    assert w == pytest.approx(1e-3 / np.sqrt(90), rel=0.25)
+    assert sr.binned_scatter(t, red, 3 / 24) > 3 * w
+
+
+def test_event_stats_equal_events_both_carry_the_signal():
+    t, f = _sector(planets=[(18.0, 1328.0, 5.0, 1500.0)], noise_ppm=300)
+    flat = sr.detrend(t, f, 1.0)
+    ev = sr.event_stats(t, flat, 18.0, 1328.0, 5 / 24)
+    assert len(ev.depths) == 2
+    assert ev.snr_without_strongest > 0.5 * ev.snr_red / np.sqrt(2)
+
+
+def test_one_strong_dip_folded_with_noise_is_vetoed():
+    # One 2000 ppm, 5 h dip at 1330.0 and nothing at 1347.0: BLS at 17 d folds
+    # the two into a "2-transit" signal. The second event alone shows nothing.
+    t, f = _sector(noise_ppm=300)
+    f = f + _box(t, 1000.0, 1330.0, 5.0, 2000.0)
+    res = sr.search(t, f, 42, 1, FAST)
+    assert res.vetoes, "the single-event fold should have been vetoed"
+    v = res.vetoes[0]
+    assert abs(v.strongest_event_btjd - 1330.0) < 0.1
+    assert v.snr_without_strongest < FAST.min_snr_without_strongest
+    for s in res.signals:  # whatever remains, it is not that dip
+        assert s.snr_without_strongest >= FAST.min_snr_without_strongest
+
+
+def test_real_two_transit_planet_survives_the_veto():
+    t, f = _sector(planets=[(18.0, 1328.0, 5.0, 1500.0)])
+    res = sr.search(t, f, 42, 1, FAST)
+    assert abs(res.signals[0].period_days - 18.0) < 0.1
+    assert not any(abs(v.period_days - 18.0) < 0.1 for v in res.vetoes)
+
+
+def test_final_peak_is_located():
+    t, f = _sector(seed=1)
+    res = sr.search(t, f, 42, 1, sr.SearchConfig())
+    assert res.final_period_days is not None and res.final_epoch_btjd is not None
+
+
+def test_event_depth_is_measured_from_the_out_of_transit_level():
+    # Flux sitting at 1.01 out of transit with 1000 ppm dips: depth 1000 ppm,
+    # not -9000 (what measuring from 1.0 gives).
+    t, f = _sector(planets=[(3.7, 1326.1, 3.0, 1000.0)], noise_ppm=100)
+    flat = sr.detrend(t, f, 1.0) + 0.01
+    ev = sr.event_stats(t, flat, 3.7, 1326.1, 3 / 24)
+    assert np.median(ev.depths) == pytest.approx(1000e-6, rel=0.2)
