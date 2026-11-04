@@ -49,12 +49,15 @@ the exact search that produced it.
 | Field | Default | Meaning |
 |---|---|---|
 | `detrend_window_days` | 1.0 | Width of the running median divided out of the flux. Anything slower is removed — **including a transit longer than about a third of it**, which is why it must be ≥ 3× the longest duration searched. |
-| `min_period_days` / `max_period_days` | 0.25 / 13.0 | The period grid. 13 d because one sector spans ~27 d; longer periods show fewer than two transits. A TCE outside this range is `outside_search_grid`. |
-| `n_periods` | 20000 | Trial periods, log-spaced across the grid. |
+| `min_period_days` / `max_period_days` | 0.25 / 26.0 | The period grid. One sector spans ~27 d, so 26 d is the longest period that can show two transits. A TCE outside this range is `outside_search_grid`. |
+| `n_periods` | 24000 | Trial periods, log-spaced across the grid. |
+| `min_transits` | 2 | A peak is only accepted if this many transits have data. One transit fits every long period that puts the next in a gap, so it is not a periodic detection. |
+| `max_peaks_tried` | 500 | Peaks checked for `min_transits`, strongest first, before giving up (`no_multi_transit_peak`). |
+| `power_detrend_frac` | 0.042 | Width of the running median subtracted from the periodogram before `sde` is measured, as a fraction of the period grid. |
 | `durations_hours` | 0.5, 1, 2, 3, 4, 6, 8 | Trial transit durations (box widths). |
 | `min_stellar_density_solar` | 0.1 | Caps the duration tried at each period at the longest a transit could physically last around a star at least this dense (circular orbit, central transit): **T_max ≈ 13 h × (P / 1 yr)^⅓ × (ρ / ρ☉)^−⅓**. At 0.1 ρ☉: 3.9 h at 1 d, 9.2 h at 13 d. Admits subgiants, excludes giants. |
 | `snr_threshold` | 7.1 | Minimum `snr` to report a signal. Numerically SPOC's MES threshold; **not the same statistic**. |
-| `sde_threshold` | 7.0 | Minimum `sde` to report a signal. ⚠️ Provisional (see §2.3). |
+| `sde_threshold` | 11.0 | Minimum `sde` to report a signal. ⚠️ Provisional (see §2.3). |
 | `max_signals` | 3 | Stop after this many signals per star. |
 | `mask_width_factor` | 1.5 | After a signal is found, mask this many durations around each of its transits before searching again. |
 
@@ -68,16 +71,25 @@ the exact search that produced it.
 | `duration_hours` | **hours** | Best-fit box width (one of `durations_hours`). |
 | `depth_ppm` | ppm | Box depth. Expected **shallower** than SPOC's limb-darkened fit (π Men c: 259 vs 302 ppm) — a box is the wrong shape for a real transit. |
 | `snr` | — | Depth ÷ its uncertainty, with the uncertainty from the measured scatter. |
-| `sde` | — | Signal Detection Efficiency: (peak − mean) ÷ std of the periodogram. How far the peak stands above every other trial. |
+| `sde` | — | Signal Detection Efficiency, on the **detrended** periodogram: (power − running median of power) ÷ robust std. How far the peak stands above nearby trials. |
 | `n_transits` | — | Transits that have in-transit data (gaps can hide some). |
 
-### 2.3 Why both `snr` and `sde`
+### 2.3 Why both `snr` and `sde` — and why `sde` is detrended
 
 On synthetic white noise the strongest of ~10⁷ trial boxes reached SNR 6.4–7.8
 (12 sectors), so an SNR cut at 7.1 alone accepted about half of noise-only
-stars. Their SDE was 3.6–5.1; injected 300–1500 ppm transits gave 12.5–14.3.
-The SDE gate sits in that gap. Real TESS noise is red, so it is to be
-calibrated on real stars with no TCE.
+stars.
+
+Raw BLS power rises with period: one deep dip fits every long period that puts
+the next transit in a gap, so the long-period end is a high plateau. A plain
+SDE measured against that plateau scored a real synthetic 2-transit 18 d
+planet (SNR 49) at 6.5. On the detrended periodogram: noise 6.1–10.0, injected
+300–1500 ppm transits at 3.7–23 d 41.8–159.6.
+
+⚠️ On REAL light curves the separation does not hold (pilot 3, 2026-11-04):
+no-TCE stars produced signals with SDE 11–76, while missed TCEs had their best
+peak at SNR 10–75 but SDE 5.6–10.9. Red noise and systematics, not white noise,
+set the real false-alarm floor. Both thresholds are open.
 
 ### 2.4 `SearchResult`
 
@@ -94,6 +106,7 @@ calibrated on real stars with no TCE.
 | `below_threshold` | The next-strongest peak failed `snr_threshold` or `sde_threshold`. The normal ending. |
 | `max_signals` | `max_signals` reached; there may be more to find. |
 | `too_few_points` | Masking left fewer than 100 cadences. |
+| `no_multi_transit_peak` | None of the `max_peaks_tried` strongest peaks had `min_transits` transits with data. |
 
 ### 2.5 Light-curve mask counts
 

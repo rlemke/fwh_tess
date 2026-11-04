@@ -34,8 +34,17 @@ import numpy as np
 class SearchConfig:
     detrend_window_days: float = 1.0
     min_period_days: float = 0.25
-    max_period_days: float = 13.0
-    n_periods: int = 20000
+    max_period_days: float = 26.0
+    n_periods: int = 24000  # same log density as 20000 over the earlier 0.25-13 d
+    # A periodic search needs at least two transits WITH DATA: one transit
+    # fits every period that puts the second in a gap. Long periods are only
+    # admitted on these terms (measured: SPOC reports 2-transit TCEs out to
+    # ~24 d; the 13 d cap excluded 33 of the 87 pilot TCEs).
+    min_transits: int = 2
+    max_peaks_tried: int = 500
+    # Running-median width as a fraction of the period grid, so the detrended
+    # SDE does not depend on how many trials the grid has (1001 of 24000).
+    power_detrend_frac: float = 0.042  # candidates checked for min_transits, best first
     durations_hours: tuple[float, ...] = (0.5, 1.0, 2.0, 3.0, 4.0, 6.0, 8.0)
     # Each period only tries durations a transit could physically have. For a
     # circular orbit the central-transit duration is ~13 h (P / 1 yr)^(1/3)
@@ -46,12 +55,13 @@ class SearchConfig:
     # the time) -- stellar variability, not transits.
     min_stellar_density_solar: float = 0.1
     snr_threshold: float = 7.1  # mirrors SPOC's MES threshold; not the same statistic
-    # SNR alone is not enough: the peak of ~10^7 trial boxes on PURE white noise
-    # reached SNR 6.4-7.8 (12 synthetic sectors), so 7.1 alone would accept
-    # about half of all noise-only stars. Their SDE was 3.6-5.1; injected
-    # 300-1500 ppm transits gave 12.5-14.3. 7.0 sits in that gap. ⚠️
-    # PROVISIONAL: real TESS noise is red, so calibrate on real non-TCE stars.
-    sde_threshold: float = 7.0
+    # SNR alone is not enough: the best of ~10^7 trial boxes on PURE white
+    # noise reached SNR 6.4-7.8 (12 synthetic sectors), so 7.1 alone accepts
+    # about half of noise-only stars. SDE is measured on the DETRENDED
+    # periodogram (see detrended_power): noise 6.1-10.0, injected 300-1500 ppm
+    # transits at 3.7-23 d 41.8-159.6. ⚠️ PROVISIONAL: real TESS noise is red,
+    # so calibrate on real non-TCE stars.
+    sde_threshold: float = 11.0
     max_signals: int = 3
     mask_width_factor: float = 1.5  # mask this many durations around each transit
 
@@ -66,6 +76,8 @@ class SearchConfig:
             raise ValueError("min_stellar_density_solar must be positive")
         if not 0 < self.min_period_days < self.max_period_days:
             raise ValueError("need 0 < min_period_days < max_period_days")
+        if self.min_transits < 1:
+            raise ValueError("min_transits must be >= 1")
         if self.max_signals < 1:
             raise ValueError("max_signals must be >= 1")
 
@@ -97,7 +109,8 @@ class SearchResult:
     n_points: int
     scatter_ppm: float  # robust (MAD) scatter of the detrended flux
     signals: list[Signal] = field(default_factory=list)
-    stop_reason: str = ""  # "below_threshold" | "max_signals" | "too_few_points"
+    # "below_threshold" | "max_signals" | "too_few_points" | "no_multi_transit_peak"
+    stop_reason: str = ""
     final_snr: float | None = None  # the peak that did NOT clear the thresholds
     final_sde: float | None = None
 
@@ -161,6 +174,49 @@ def _in_transit(
     return np.abs(phase) < half_width
 
 
+def detrended_power(power: np.ndarray, window: int) -> np.ndarray:
+    """BLS power minus its running median over the (log-spaced) grid, ÷ robust std.
+
+    Raw BLS power rises with period: few transits fit noise better, and one
+    deep dip fits EVERY long period that puts the next transit in a gap. Left
+    in, that plateau inflated the mean and std a plain SDE is measured
+    against, and a real 2-transit planet at SNR 49 scored SDE 6.5 (measured,
+    synthetic 18 d). The running median is computed on every 10th trial and
+    interpolated — the trend is smooth, the peaks are not.
+    """
+    step = 10
+    coarse_x = np.arange(0, len(power), step)
+    half = max(1, window // (2 * step))
+    coarse = power[::step]
+    lo = np.clip(np.arange(len(coarse)) - half, 0, None)
+    hi = np.clip(np.arange(len(coarse)) + half + 1, None, len(coarse))
+    med = np.array([np.median(coarse[a:b]) for a, b in zip(lo, hi)])
+    resid = power - np.interp(np.arange(len(power)), coarse_x, med)
+    return resid / (1.4826 * np.median(np.abs(resid - np.median(resid))))
+
+
+def _n_transits(t: np.ndarray, period: float, epoch: float, duration: float) -> int:
+    """Distinct transits with at least one in-transit cadence."""
+    in_tr = _in_transit(t, period, epoch, duration / 2.0)
+    return len(np.unique(np.round((t[in_tr] - epoch) / period)))
+
+
+def _best_with_transits(
+    t: np.ndarray,
+    power: np.ndarray,
+    periods: np.ndarray,
+    epochs: np.ndarray,
+    durations: np.ndarray,
+    min_transits: int,
+    max_tries: int,
+) -> int | None:
+    """Index of the strongest peak showing ``min_transits`` transits with data."""
+    for i in np.argsort(power)[::-1][:max_tries]:
+        if _n_transits(t, periods[i], epochs[i], durations[i]) >= min_transits:
+            return int(i)
+    return None
+
+
 def search(
     time: np.ndarray,
     flux: np.ndarray,
@@ -210,10 +266,16 @@ def search(
                 "depth_snr",
             )
         }
-        power = res["power"]
-        i = int(np.argmax(power))
+        power = detrended_power(
+            res["power"], max(3, round(cfg.power_detrend_frac * cfg.n_periods))
+        )
+        t_all = res["period"], res["transit_time"], res["duration"]
+        i = _best_with_transits(t, power, *t_all, cfg.min_transits, cfg.max_peaks_tried)
+        if i is None:
+            result.stop_reason = "no_multi_transit_peak"
+            return result
         snr = float(res["depth_snr"][i])
-        sde = float((power[i] - power.mean()) / power.std())
+        sde = float(power[i])
         if (
             snr < cfg.snr_threshold
             or sde < cfg.sde_threshold
@@ -228,8 +290,6 @@ def search(
             float(res["transit_time"][i]),
             float(res["duration"][i]),
         )
-        in_tr = _in_transit(t, p, t0, dur / 2.0)
-        epochs_seen = np.unique(np.round((t[in_tr] - t0) / p))
         result.signals.append(
             Signal(
                 rank=len(result.signals) + 1,
@@ -239,7 +299,7 @@ def search(
                 depth_ppm=float(res["depth"][i]) * 1e6,
                 snr=snr,
                 sde=sde,
-                n_transits=len(epochs_seen),
+                n_transits=_n_transits(t, p, t0, dur),
             )
         )
         if len(result.signals) >= cfg.max_signals:

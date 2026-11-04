@@ -183,12 +183,14 @@ def test_search_finds_second_planet_after_masking_first():
 
 @pytest.mark.parametrize("seed", [1, 4, 10])  # the seeds whose noise peak beat SNR 7.1
 def test_search_on_noise_reports_why_it_stopped(seed):
+    # The DEFAULT grid: SDE thresholds are calibrated on it, not on FAST.
+    cfg = sr.SearchConfig()
     t, f = _sector(seed=seed)
-    res = sr.search(t, f, 42, 1, FAST)
+    res = sr.search(t, f, 42, 1, cfg)
     assert res.signals == []
     assert res.stop_reason == "below_threshold"
     # SNR alone would have accepted this noise peak; the SDE gate is what refuses it.
-    assert res.final_snr > FAST.snr_threshold and res.final_sde < FAST.sde_threshold
+    assert res.final_snr > cfg.snr_threshold and res.final_sde < cfg.sde_threshold
 
 
 # --- the TCE table and matching ---------------------------------------------
@@ -198,7 +200,7 @@ TCE_CSV = """# TESS DV TCE statistics
 tceid,ticid,tce_plnt_num,tce_period,tce_time0bt,tce_duration,tce_depth,tce_model_snr,tce_num_transits
 00261136679-01,261136679,1,6.2675,1325.5,2.97585,301.8,28.29,5
 00000000042-01,42,1,3.7,1326.1,3.0,1500,40,7
-00000000042-02,42,2,20.5,1330.0,5.0,900,9,1
+00000000042-02,42,2,30.5,1330.0,5.0,900,9,1
 00000000077-01,77,1,2.0,1325.9,2.0,800,12,13
 """
 
@@ -246,7 +248,7 @@ def test_match_buckets_every_tce_and_signal():
     assert (261136679, 1, "recovered") in by
     alias = by[(42, 1, "recovered_alias")]
     assert alias.alias == 2.0  # we found twice the period
-    assert by[(42, 2, "missed")].cause == "outside_search_grid"  # 20.5 d > 13 d
+    assert by[(42, 2, "missed")].cause == "outside_search_grid"  # 30.5 d > 26 d
     assert by[(77, 1, "missed")].cause == "not_searched"
     assert (42, None, "unmatched") in by
     assert mt.summarise(rows) == {
@@ -320,3 +322,17 @@ def test_wide_box_at_short_period_is_not_reported():
     t, f = _sector(planets=[(0.8, 1325.5, 8.0, 400.0)])
     for s in sr.search(t, f, 42, 1, FAST).signals:
         assert s.duration_hours <= sr.max_duration_days(s.period_days, 0.1) * 24 + 1e-9
+
+
+def test_long_period_two_transits_recovered():
+    # 18 d: transits at 1328.0 and 1346.0, both outside the downlink gap.
+    t, f = _sector(planets=[(18.0, 1328.0, 5.0, 1500.0)])
+    s = sr.search(t, f, 42, 1, FAST).signals[0]
+    assert abs(s.period_days - 18.0) < 0.1 and s.n_transits == 2
+
+
+def test_single_transit_is_never_reported_as_periodic():
+    # One 1500 ppm dip, its second transit would fall after the sector ends.
+    t, f = _sector(planets=[(40.0, 1335.0, 5.0, 1500.0)])
+    for s in sr.search(t, f, 42, 1, FAST).signals:
+        assert s.n_transits >= 2
