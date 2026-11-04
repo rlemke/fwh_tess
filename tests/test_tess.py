@@ -296,3 +296,27 @@ def test_direct_match_wins_over_an_earlier_tce_alias():
         ("x-01", "missed"),
         ("x-02", "recovered"),
     ]
+
+
+def test_duration_cap_follows_keplers_law():
+    # 0.1 rho_sun: ~3.9 h at 1 d, ~9.2 h at 13 d.
+    assert sr.max_duration_days(1.0, 0.1) * 24 == pytest.approx(3.9, abs=0.1)
+    assert sr.max_duration_days(13.0, 0.1) * 24 == pytest.approx(9.2, abs=0.1)
+
+
+def test_chunks_never_try_a_duration_longer_than_allowed():
+    periods = np.exp(np.linspace(np.log(0.25), np.log(13.0), 2000))
+    durations = np.array(FAST.durations_hours) / 24.0
+    chunks = sr._period_chunks(periods, durations, 0.1)
+    assert sum(len(p) for p, _ in chunks) == len(periods)
+    for p, d in chunks:
+        assert d.max() <= sr.max_duration_days(p.min(), 0.1) + 1e-12
+        assert d.max() < p.min()
+
+
+def test_wide_box_at_short_period_is_not_reported():
+    # Variability shaped like an 8 h dip every 0.8 d (in "transit" 42% of the
+    # time): no plausible transit is that long at that period.
+    t, f = _sector(planets=[(0.8, 1325.5, 8.0, 400.0)])
+    for s in sr.search(t, f, 42, 1, FAST).signals:
+        assert s.duration_hours <= sr.max_duration_days(s.period_days, 0.1) * 24 + 1e-9

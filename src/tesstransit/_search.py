@@ -33,10 +33,18 @@ import numpy as np
 @dataclass(frozen=True)
 class SearchConfig:
     detrend_window_days: float = 1.0
-    min_period_days: float = 0.5
+    min_period_days: float = 0.25
     max_period_days: float = 13.0
     n_periods: int = 20000
-    durations_hours: tuple[float, ...] = (1.0, 2.0, 3.0, 4.0, 6.0, 8.0)
+    durations_hours: tuple[float, ...] = (0.5, 1.0, 2.0, 3.0, 4.0, 6.0, 8.0)
+    # Each period only tries durations a transit could physically have. For a
+    # circular orbit the central-transit duration is ~13 h (P / 1 yr)^(1/3)
+    # (rho / rho_sun)^(-1/3), so a floor on stellar density caps the duration.
+    # 0.1 rho_sun admits subgiants (cap 3.9 h at 1 d, 9.2 h at 13 d) and
+    # excludes giants. Measured reason: on the 40 no-TCE pilot stars, 7 had
+    # "signals", nearly all an 8 h box every 0.5-1.1 d (in transit 30-65% of
+    # the time) -- stellar variability, not transits.
+    min_stellar_density_solar: float = 0.1
     snr_threshold: float = 7.1  # mirrors SPOC's MES threshold; not the same statistic
     # SNR alone is not enough: the peak of ~10^7 trial boxes on PURE white noise
     # reached SNR 6.4-7.8 (12 synthetic sectors), so 7.1 alone would accept
@@ -54,11 +62,8 @@ class SearchConfig:
                 f"detrend window {self.detrend_window_days} d is under 3x the longest "
                 f"duration searched ({longest:.3f} d); it would flatten those transits"
             )
-        if longest >= self.min_period_days:
-            raise ValueError(
-                f"longest duration {longest:.3f} d must be shorter than the shortest "
-                f"period {self.min_period_days} d"
-            )
+        if self.min_stellar_density_solar <= 0:
+            raise ValueError("min_stellar_density_solar must be positive")
         if not 0 < self.min_period_days < self.max_period_days:
             raise ValueError("need 0 < min_period_days < max_period_days")
         if self.max_signals < 1:
@@ -120,6 +125,35 @@ def _mad_sigma(x: np.ndarray) -> float:
     return float(1.4826 * np.median(np.abs(x - np.median(x))))
 
 
+def max_duration_days(period_days: np.ndarray | float, min_density_solar: float) -> Any:
+    """Longest physically plausible transit at ``period_days`` (circular, b=0)."""
+    hours = (
+        13.0
+        * (np.asarray(period_days) / 365.25) ** (1 / 3)
+        * min_density_solar ** (-1 / 3)
+    )
+    return hours / 24.0
+
+
+def _period_chunks(
+    periods: np.ndarray, durations: np.ndarray, min_density: float
+) -> list[tuple[np.ndarray, np.ndarray]]:
+    """Split the period grid so each chunk tries only the durations allowed there.
+
+    The allowed set only grows with period, so the chunks are contiguous and
+    every chunk's durations are shorter than its periods (BLS requires it).
+    """
+    cap = max_duration_days(periods, min_density)
+    n_allowed = np.searchsorted(np.sort(durations), cap, side="right")
+    chunks = []
+    for n in np.unique(n_allowed):
+        if n == 0:
+            continue  # no searched duration is short enough at these periods
+        sel = n_allowed == n
+        chunks.append((periods[sel], np.sort(durations)[:n]))
+    return chunks
+
+
 def _in_transit(
     time: np.ndarray, period: float, epoch: float, half_width: float
 ) -> np.ndarray:
@@ -154,6 +188,7 @@ def search(
         )
     )
     durations = np.array(cfg.durations_hours) / 24.0
+    chunks = _period_chunks(periods, durations, cfg.min_stellar_density_solar)
     keep = np.ones(len(time), dtype=bool)
 
     while True:
@@ -163,20 +198,35 @@ def search(
         t, f = time[keep], flat[keep]
         dy = np.full(len(t), scatter)
         bls = BoxLeastSquares(t, f, dy=dy)
-        res = bls.power(periods, durations, objective="likelihood")
-        i = int(np.argmax(res.power))
-        snr = float(res.depth_snr[i])
-        power = np.asarray(res.power)
+        parts = [bls.power(p, d, objective="likelihood") for p, d in chunks]
+        res = {
+            k: np.concatenate([np.asarray(getattr(r, k)) for r in parts])
+            for k in (
+                "power",
+                "period",
+                "transit_time",
+                "duration",
+                "depth",
+                "depth_snr",
+            )
+        }
+        power = res["power"]
+        i = int(np.argmax(power))
+        snr = float(res["depth_snr"][i])
         sde = float((power[i] - power.mean()) / power.std())
-        if snr < cfg.snr_threshold or sde < cfg.sde_threshold or not res.depth[i] > 0:
+        if (
+            snr < cfg.snr_threshold
+            or sde < cfg.sde_threshold
+            or not res["depth"][i] > 0
+        ):
             result.stop_reason = "below_threshold"
             result.final_snr = snr
             result.final_sde = sde
             return result
         p, t0, dur = (
-            float(res.period[i]),
-            float(res.transit_time[i]),
-            float(res.duration[i]),
+            float(res["period"][i]),
+            float(res["transit_time"][i]),
+            float(res["duration"][i]),
         )
         in_tr = _in_transit(t, p, t0, dur / 2.0)
         epochs_seen = np.unique(np.round((t[in_tr] - t0) / p))
@@ -186,7 +236,7 @@ def search(
                 period_days=p,
                 epoch_btjd=t0,
                 duration_hours=dur * 24.0,
-                depth_ppm=float(res.depth[i]) * 1e6,
+                depth_ppm=float(res["depth"][i]) * 1e6,
                 snr=snr,
                 sde=sde,
                 n_transits=len(epochs_seen),
