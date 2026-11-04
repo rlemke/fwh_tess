@@ -56,3 +56,54 @@ sample it was not tuned on before it is quoted.
   failed with `EndpointConnectionError`. Each failure was recorded per star,
   so the runs were visibly invalid rather than silently short. The S3 client
   now retries 10× with backoff; both were re-run clean.
+
+## Hold-out check (2026-11-04)
+
+Same configuration as pilot 5, on a sample sharing **no** stars with it
+(`--seed 2 --holdout-of runs/pilot5-veto-fixed`): 60 TCE stars, one drawn
+per SNR bin (91 TCEs), + 40 new no-TCE stars.
+
+| Sample | In-grid TCEs | Recovered (incl. alias) | Not detected | Exhausted | No-TCE stars with a signal |
+|---|---|---|---|---|---|
+| Development (pilot 5) | 87 | 36 (41%) | 36 | 15 | 8 / 40 |
+| Hold-out | 86 | 34 (40%) | 37 | 15 | 7 / 40 |
+
+The development numbers hold on unseen stars: no sign that the tuning fitted
+the sample. The hold-out's no-TCE signals are of the same kind — short
+periods (0.29–2.1 d), many transits, some plainly eclipsing binaries (TIC
+220507474: 6,939 ppm every 0.963 d).
+
+## Why TCEs are missed
+
+From what each search recorded (strongest rejected peak, vetoes, signals):
+
+| Class | Development | Hold-out |
+|---|---|---|
+| Never the strongest peak | 29 | 29 |
+| Found at the TCE's period, rejected by the SDE gate | 4 | 2 |
+| A signal within 3% of the period but outside the match tolerance | 3 | 6 |
+
+Thresholds are not the main limit. Of the 29 development misses that were never
+the strongest peak, 20 have periods of 10–24 d (two or three transits), 6 have
+durations above 8 h — beyond the longest box searched (**182 of 1,457
+sector-1 TCEs are longer than 8 h**, 92 longer than 12 h) — and 3 have a SPOC
+model SNR below 7.1.
+
+## What became of the TCEs: the TOI catalogue
+
+TCEs are unvetted detections. Joining each to the TOI catalogue (same star,
+period within 1%, alias-aware):
+
+| Outcome | Development | Hold-out |
+|---|---|---|
+| Recovered | 36 — 2 TOIs (1 CP, 1 KP) | 34 — 4 TOIs (3 CP, 1 EB) |
+| Not detected | 36 — 1 TOI (PC: TOI 119.01) | 37 — 0 TOIs |
+| Search exhausted | 15 — 0 TOIs | 15 — 0 TOIs |
+
+**Every confirmed or known planet in both samples (5 of 5 CP/KP) was
+recovered. Of 73 not-detected TCEs, 1 became a TOI.** Most of what the search
+misses are TCEs SPOC's own vetting never promoted. ⚠️ "No TOI" is not proof of
+a false alarm (vetting also uses later sectors), and seven TOIs are far too
+few to quote a planet recovery rate — the sample was drawn across TCE SNR, not
+across planets. Recovery against TCEs measures pipeline agreement; recovery
+against TOIs is what bears on planets, and needs a sample built for it.
