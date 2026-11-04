@@ -25,12 +25,17 @@ handlers yet.
 
 Light curves are streamed and can be discarded: only per-star results are kept.
 
+Every term, field and outcome — ours and SPOC's `tce_*` columns — is defined in
+[docs/definitions.md](docs/definitions.md).
+
 ## Layout
 
 | Module | |
 |---|---|
 | `_lightcurve.py` | locate / fetch / load one light curve; the quality mask is counted, not hidden |
-| `_search.py` | running-median detrend + iterative BLS; every parameter in `SearchConfig`, which travels with the result |
+| `_search.py` | running-median detrend + iterative BLS, durations capped by period (Kepler's law); every parameter in `SearchConfig`, which travels with the result |
+| `_manifest.py` | which stars the sector observed, from the bucket itself |
+| `pilot.py` | `python -m tesstransit.pilot` — stratified sample → search → match |
 | `_match.py` | the TCE table and the matching rules: `recovered` / `recovered_alias` / `missed` (with a cause) / `unmatched` |
 
 ## Thresholds are provisional
