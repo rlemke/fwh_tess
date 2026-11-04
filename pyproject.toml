@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fwh-tess"
+version = "0.1.0"
+description = "An independent transit re-search of TESS 2-minute light curves, compared against SPOC's single-sector TCEs"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "astropy>=6.0",      # FITS reader + BoxLeastSquares
+    "boto3>=1.28",       # anonymous reads of MAST's public S3 copy of TESS
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "ruff>=0.8.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
