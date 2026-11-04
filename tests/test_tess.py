@@ -285,3 +285,14 @@ def test_miss_after_max_signals_is_search_exhausted():
     tce = mt.parse_tce_csv(TCE_CSV)[1]
     res = _result(42, [_sig(1, 1.1, 1325.4)], stop="max_signals")
     assert mt.match_star(42, res, [tce])[0].cause == "search_exhausted"
+
+
+def test_direct_match_wins_over_an_earlier_tce_alias():
+    # Measured on TIC 350479101: TCE 1 at 11.92 d, TCE 2 at 5.97 d, one signal at 5.97 d.
+    t1 = mt.TCE("x-01", 9, 1, 11.92, 1326.0, 4.0, None, None, None)
+    t2 = mt.TCE("x-02", 9, 2, 5.97, 1326.0, 4.0, None, None, None)
+    rows = mt.match_star(9, _result(9, [_sig(1, 5.97, 1326.0, 4.0)]), [t1, t2])
+    assert [(r.tce.tce_id, r.bucket) for r in rows] == [
+        ("x-01", "missed"),
+        ("x-02", "recovered"),
+    ]

@@ -76,13 +76,16 @@ def find_lc_key(client: Any, tic_id: int, sector: int) -> str:
     return keys[0]
 
 
-def fetch_lc(client: Any, tic_id: int, sector: int, dest_dir: Path) -> Path:
+def fetch_lc(
+    client: Any, tic_id: int, sector: int, dest_dir: Path, key: str | None = None
+) -> Path:
     """Download one light curve into ``dest_dir``; reuse it if already there.
 
-    Reuse is by exact size against the object's listing, so a truncated
-    earlier download is fetched again rather than trusted.
+    ``key`` comes from the sector manifest when there is one, saving a listing
+    per star. Reuse is by exact size against the object's listing, so a
+    truncated earlier download is fetched again rather than trusted.
     """
-    key = find_lc_key(client, tic_id, sector)
+    key = key or find_lc_key(client, tic_id, sector)
     dest = Path(dest_dir) / key.rsplit("/", 1)[1]
     size = client.head_object(Bucket=BUCKET, Key=key)["ContentLength"]
     if dest.exists() and dest.stat().st_size == size:

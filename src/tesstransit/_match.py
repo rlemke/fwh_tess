@@ -145,22 +145,30 @@ def match_star(
 
     search_cfg = result.config
     free = list(result.signals)
+    matched: dict[str, MatchRow] = {}
+    # Two passes over ALL TCEs: direct matches first, aliases only after. A
+    # single pass in TCE order let one TCE claim a signal as an alias that was
+    # a direct match for a later TCE (measured: TIC 350479101, TCEs at 11.92 d
+    # and 5.97 d; our 5.97 d signal went to the first as a 1/2x alias).
+    for want_direct in (True, False):
+        for t in tces:
+            if t.tce_id in matched:
+                continue
+            hits = [
+                (s, k)
+                for s in free
+                if (k := _alias_of(s, t, cfg)) is not None and (k == 1.0) == want_direct
+            ]
+            if not hits:
+                continue
+            s, k = min(hits, key=lambda h: h[0].rank)  # the strongest signal
+            free.remove(s)
+            bucket = "recovered" if k == 1.0 else "recovered_alias"
+            matched[t.tce_id] = MatchRow(tic_id, bucket, tce=t, signal=s, alias=k)
     rows: list[MatchRow] = []
     for t in tces:
-        hits = [(s, k) for s in free if (k := _alias_of(s, t, cfg)) is not None]
-        if hits:
-            # Prefer an un-aliased match, then the strongest signal.
-            s, k = min(hits, key=lambda h: (h[1] != 1.0, h[0].rank))
-            free.remove(s)
-            rows.append(
-                MatchRow(
-                    tic_id,
-                    "recovered" if k == 1.0 else "recovered_alias",
-                    tce=t,
-                    signal=s,
-                    alias=k,
-                )
-            )
+        if t.tce_id in matched:
+            rows.append(matched[t.tce_id])
             continue
         if (
             not search_cfg["min_period_days"]
