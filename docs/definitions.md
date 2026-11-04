@@ -48,6 +48,9 @@ the exact search that produced it.
 
 | Field | Default | Meaning |
 |---|---|---|
+| `detrend_method` | `median` | `median` (running median) or `biweight` (Tukey biweight via wotan, needs the `[wotan]` extra). Measured equivalent on the pilot (experiments.md, 6a). |
+| `detrend_per_duration` | False | True = one flattening per trial duration with window `detrend_window_factor` × duration (floored at `detrend_min_window_days`). Measured WORSE (experiments.md, 6b/6c): transits are longer than the box that finds them. |
+| `detrend_window_factor`, `detrend_min_window_days` | 3.0, 0.25 | Only used with `detrend_per_duration`. |
 | `detrend_window_days` | 1.0 | Width of the running median divided out of the flux. Anything slower is removed — **including a transit longer than about a third of it**, which is why it must be ≥ 3× the longest duration searched. |
 | `min_period_days` / `max_period_days` | 0.25 / 26.0 | The period grid. One sector spans ~27 d, so 26 d is the longest period that can show two transits. A TCE outside this range is `outside_search_grid`. |
 | `n_periods` | 24000 | Trial periods, log-spaced across the grid. |

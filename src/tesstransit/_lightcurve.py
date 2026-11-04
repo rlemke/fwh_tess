@@ -50,8 +50,18 @@ def s3_client() -> Any:
     from botocore import UNSIGNED
     from botocore.config import Config
 
+    # Retries with backoff: a pilot lost its network mid-run and 133 of 200
+    # fetches failed with EndpointConnectionError; the default retry budget
+    # gave up within seconds.
     return boto3.client(
-        "s3", region_name=REGION, config=Config(signature_version=UNSIGNED)
+        "s3",
+        region_name=REGION,
+        config=Config(
+            signature_version=UNSIGNED,
+            retries={"max_attempts": 10, "mode": "standard"},
+            connect_timeout=20,
+            read_timeout=60,
+        ),
     )
 
 

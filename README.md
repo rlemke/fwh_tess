@@ -25,6 +25,7 @@ handlers yet.
 
 Light curves are streamed and can be discarded: only per-star results are kept.
 
+Each experiment and what it changed is in [docs/experiments.md](docs/experiments.md).
 Every term, field and outcome — ours and SPOC's `tce_*` columns — is defined in
 [docs/definitions.md](docs/definitions.md).
 

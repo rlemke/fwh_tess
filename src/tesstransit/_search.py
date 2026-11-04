@@ -32,7 +32,22 @@ import numpy as np
 
 @dataclass(frozen=True)
 class SearchConfig:
+    # How the light curve is flattened before the search.
+    #   detrend_method: "median" (running median) or "biweight" (Tukey's
+    #     biweight location via wotan; robust to the transit itself pulling
+    #     the trend down -- needs the [wotan] extra).
+    #   detrend_per_duration: False = ONE flattening with detrend_window_days
+    #     for every trial duration; True = a flattening per trial duration with
+    #     window = detrend_window_factor x that duration (floored at
+    #     detrend_min_window_days). A short window removes sub-day stellar
+    #     variability that a 1-day window leaves (measured: most no-TCE pilot
+    #     "signals" were 0.36-1.1 d periodicities), but would flatten a long
+    #     transit -- so each duration gets the shortest window that keeps it.
+    detrend_method: str = "median"
+    detrend_per_duration: bool = False
     detrend_window_days: float = 1.0
+    detrend_window_factor: float = 3.0
+    detrend_min_window_days: float = 0.25
     min_period_days: float = 0.25
     max_period_days: float = 26.0
     n_periods: int = 24000  # same log density as 20000 over the earlier 0.25-13 d
@@ -41,7 +56,7 @@ class SearchConfig:
     # admitted on these terms (measured: SPOC reports 2-transit TCEs out to
     # ~24 d; the 13 d cap excluded 33 of the 87 pilot TCEs).
     min_transits: int = 2
-    max_peaks_tried: int = 500
+    max_peaks_tried: int = 500  # candidates checked for min_transits, best first
     # Per-transit consistency. A real transit has a similar depth in every
     # event; an instrumental dip is usually ONE strong event plus noise, which
     # BLS still folds into a "periodic" signal. So the events other than the
@@ -53,7 +68,7 @@ class SearchConfig:
     max_vetoes: int = 5
     # Running-median width as a fraction of the period grid, so the detrended
     # SDE does not depend on how many trials the grid has (1001 of 24000).
-    power_detrend_frac: float = 0.042  # candidates checked for min_transits, best first
+    power_detrend_frac: float = 0.042
     durations_hours: tuple[float, ...] = (0.5, 1.0, 2.0, 3.0, 4.0, 6.0, 8.0)
     # Each period only tries durations a transit could physically have. For a
     # circular orbit the central-transit duration is ~13 h (P / 1 yr)^(1/3)
@@ -75,8 +90,12 @@ class SearchConfig:
     mask_width_factor: float = 1.5  # mask this many durations around each transit
 
     def validate(self) -> None:
+        if self.detrend_method not in ("median", "biweight"):
+            raise ValueError(f"unknown detrend_method {self.detrend_method!r}")
+        if self.detrend_per_duration and self.detrend_window_factor < 3:
+            raise ValueError("detrend_window_factor under 3 would flatten the transits")
         longest = max(self.durations_hours) / 24.0
-        if self.detrend_window_days < 3 * longest:
+        if not self.detrend_per_duration and self.detrend_window_days < 3 * longest:
             raise ValueError(
                 f"detrend window {self.detrend_window_days} d is under 3x the longest "
                 f"duration searched ({longest:.3f} d); it would flatten those transits"
@@ -160,10 +179,54 @@ def running_median(
     return np.array([np.median(flux[a:b]) for a, b in zip(lo, hi)])
 
 
-def detrend(time: np.ndarray, flux: np.ndarray, window_days: float) -> np.ndarray:
+def detrend(
+    time: np.ndarray, flux: np.ndarray, window_days: float, method: str = "median"
+) -> np.ndarray:
+    """``flux`` divided by its trend. May contain NaN (biweight, sparse edges)."""
     if np.any(np.diff(time) < 0):
         raise ValueError("time must be sorted ascending")
-    return flux / running_median(time, flux, window_days)
+    if method == "median":
+        return flux / running_median(time, flux, window_days)
+    if method == "biweight":
+        from wotan import flatten
+
+        return np.asarray(
+            flatten(
+                time, flux, method="biweight", window_length=window_days, edge_cutoff=0
+            )
+        )
+    raise ValueError(f"unknown detrend method {method!r}")
+
+
+@dataclass
+class _Layer:
+    """One flattening of the light curve, and the trial durations searched on it."""
+
+    durations: np.ndarray  # days
+    flat: np.ndarray
+    valid: np.ndarray  # finite after flattening
+    scatter: float
+    window_days: float
+
+
+def _layers(time: np.ndarray, flux: np.ndarray, cfg: SearchConfig) -> list[_Layer]:
+    durations = np.sort(np.array(cfg.durations_hours) / 24.0)
+    if not cfg.detrend_per_duration:
+        groups = [(cfg.detrend_window_days, durations)]
+    else:
+        groups = [
+            (
+                max(cfg.detrend_min_window_days, cfg.detrend_window_factor * d),
+                np.array([d]),
+            )
+            for d in durations
+        ]
+    out = []
+    for window, durs in groups:
+        flat = detrend(time, flux, window, cfg.detrend_method)
+        valid = np.isfinite(flat)
+        out.append(_Layer(durs, flat, valid, _mad_sigma(flat[valid]), window))
+    return out
 
 
 def _mad_sigma(x: np.ndarray) -> float:
@@ -185,6 +248,8 @@ def _period_chunks(
 ) -> list[tuple[np.ndarray, np.ndarray]]:
     """Split the period grid so each chunk tries only the durations allowed there.
 
+    Returns ``(mask over periods, durations allowed)`` per chunk.
+
     The allowed set only grows with period, so the chunks are contiguous and
     every chunk's durations are shorter than its periods (BLS requires it).
     """
@@ -194,8 +259,7 @@ def _period_chunks(
     for n in np.unique(n_allowed):
         if n == 0:
             continue  # no searched duration is short enough at these periods
-        sel = n_allowed == n
-        chunks.append((periods[sel], np.sort(durations)[:n]))
+        chunks.append((n_allowed == n, np.sort(durations)[:n]))
     return chunks
 
 
@@ -331,14 +395,14 @@ def search(
 
     cfg = config or SearchConfig()
     cfg.validate()
-    flat = detrend(time, flux, cfg.detrend_window_days)
-    scatter = _mad_sigma(flat)
+    layers = _layers(time, flux, cfg)
+    longest = layers[-1]  # the widest window: the closest to the raw light curve
     result = SearchResult(
         tic_id=tic_id,
         sector=sector,
         config=cfg.to_dict(),
         n_points=len(time),
-        scatter_ppm=scatter * 1e6,
+        scatter_ppm=longest.scatter * 1e6,
     )
     periods = np.exp(
         np.linspace(
@@ -348,38 +412,49 @@ def search(
     durations = np.array(cfg.durations_hours) / 24.0
     chunks = _period_chunks(periods, durations, cfg.min_stellar_density_solar)
     keep = np.ones(len(time), dtype=bool)
+    fields = ("power", "transit_time", "duration", "depth", "depth_snr")
 
     while True:
         if keep.sum() < 100:
             result.stop_reason = "too_few_points"
             return result
-        t, f = time[keep], flat[keep]
-        dy = np.full(len(t), scatter)
-        bls = BoxLeastSquares(t, f, dy=dy)
-        parts = [bls.power(p, d, objective="likelihood") for p, d in chunks]
-        res = {
-            k: np.concatenate([np.asarray(getattr(r, k)) for r in parts])
-            for k in (
-                "power",
-                "period",
-                "transit_time",
-                "duration",
-                "depth",
-                "depth_snr",
+        # One periodogram per layer, on the period grid; -inf where a layer
+        # has no duration allowed at that period.
+        grid = {k: np.full((len(layers), len(periods)), -np.inf) for k in fields}
+        for li, layer in enumerate(layers):
+            use = keep & layer.valid
+            bls = BoxLeastSquares(
+                time[use], layer.flat[use], dy=np.full(use.sum(), layer.scatter)
             )
-        }
+            for sel, allowed in chunks:
+                d = np.intersect1d(allowed, layer.durations)
+                if len(d) == 0:
+                    continue
+                r = bls.power(periods[sel], d, objective="likelihood")
+                for k in fields:
+                    grid[k][li, sel] = np.asarray(getattr(r, k))
+        # Likelihood power ~ SNR^2 / 2 with each layer's own scatter, so the
+        # layers are comparable: keep the best layer at each period.
+        best_layer = np.argmax(grid["power"], axis=0)
+        cols = np.arange(len(periods))
+        res = {k: grid[k][best_layer, cols] for k in fields}
+        raw = res["power"]
+        raw[~np.isfinite(raw)] = np.min(raw[np.isfinite(raw)])
         power = detrended_power(
-            res["power"], max(3, round(cfg.power_detrend_frac * cfg.n_periods))
+            raw, max(3, round(cfg.power_detrend_frac * cfg.n_periods))
         )
-        t_all = res["period"], res["transit_time"], res["duration"]
-        i = _best_with_transits(t, power, *t_all, cfg.min_transits, cfg.max_peaks_tried)
+        i = _best_with_transits(
+            time[keep], power, periods, res["transit_time"], res["duration"],
+            cfg.min_transits, cfg.max_peaks_tried,
+        )  # fmt: skip
         if i is None:
             result.stop_reason = "no_multi_transit_peak"
             return result
+        layer = layers[best_layer[i]]
         snr = float(res["depth_snr"][i])
         sde = float(power[i])
         p, t0, dur = (
-            float(res["period"][i]),
+            float(periods[i]),
             float(res["transit_time"][i]),
             float(res["duration"][i]),
         )
@@ -392,7 +467,8 @@ def search(
             result.final_snr, result.final_sde = snr, sde
             result.final_period_days, result.final_epoch_btjd = p, t0
             return result
-        ev = event_stats(t, f, p, t0, dur)
+        use = keep & layer.valid
+        ev = event_stats(time[use], layer.flat[use], p, t0, dur)
         if ev.snr_without_strongest < cfg.min_snr_without_strongest:
             centre = float(ev.centres[ev.strongest])
             result.vetoes.append(

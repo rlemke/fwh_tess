@@ -310,8 +310,9 @@ def test_chunks_never_try_a_duration_longer_than_allowed():
     periods = np.exp(np.linspace(np.log(0.25), np.log(13.0), 2000))
     durations = np.array(FAST.durations_hours) / 24.0
     chunks = sr._period_chunks(periods, durations, 0.1)
-    assert sum(len(p) for p, _ in chunks) == len(periods)
-    for p, d in chunks:
+    assert sum(int(m.sum()) for m, _ in chunks) == len(periods)
+    for m, d in chunks:
+        p = periods[m]
         assert d.max() <= sr.max_duration_days(p.min(), 0.1) + 1e-12
         assert d.max() < p.min()
 
@@ -393,3 +394,32 @@ def test_event_depth_is_measured_from_the_out_of_transit_level():
     flat = sr.detrend(t, f, 1.0) + 0.01
     ev = sr.event_stats(t, flat, 3.7, 1326.1, 3 / 24)
     assert np.median(ev.depths) == pytest.approx(1000e-6, rel=0.2)
+
+
+# --- detrending variants -----------------------------------------------------
+
+
+@pytest.mark.parametrize("method", ["median", "biweight"])
+@pytest.mark.parametrize("per_duration", [False, True])
+def test_every_detrend_variant_recovers_an_injected_planet(method, per_duration):
+    cfg = sr.SearchConfig(
+        n_periods=5000, detrend_method=method, detrend_per_duration=per_duration
+    )
+    t, f = _sector(planets=[(3.7, 1326.1, 3.0, 1500.0)])
+    s = sr.search(t, f, 42, 1, cfg).signals[0]
+    assert abs(s.period_days - 3.7) < 0.01
+
+
+def test_per_duration_window_removes_short_period_variability():
+    # 0.6 d stellar variability survives a 1-day window; a 3x-duration window
+    # for a 2 h transit (6 h) removes most of it.
+    t, _ = _sector(noise_ppm=50)
+    f = 1.0 + 1e-3 * np.sin(2 * np.pi * t / 0.6)
+    one_day = np.std(sr.detrend(t, f, 1.0))
+    short = np.std(sr.detrend(t, f, 0.25))
+    assert short < 0.5 * one_day
+
+
+def test_config_refuses_per_duration_factor_that_would_flatten():
+    with pytest.raises(ValueError, match="flatten"):
+        sr.SearchConfig(detrend_per_duration=True, detrend_window_factor=2.0).validate()

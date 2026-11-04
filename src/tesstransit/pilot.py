@@ -47,7 +47,7 @@ _client: Any = None
 
 
 def _search_one(
-    tic: int, sector: int, key: str, workdir: str, keep: bool
+    tic: int, sector: int, key: str, workdir: str, keep: bool, cfg: sr.SearchConfig
 ) -> dict[str, Any]:
     global _client
     if _client is None:
@@ -57,7 +57,7 @@ def _search_one(
         path = lc.fetch_lc(_client, tic, sector, Path(workdir), key=key)
         t_fetch = time.time() - t0
         curve = lc.load_lc(path)
-        res = sr.search(curve.time, curve.flux, tic, sector)
+        res = sr.search(curve.time, curve.flux, tic, sector, cfg)
         if not keep:
             path.unlink()
         return {
@@ -145,8 +145,20 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--keep-lc", action="store_true")
+    ap.add_argument(
+        "--detrend-method", choices=["median", "biweight"], default="median"
+    )
+    ap.add_argument(
+        "--per-duration",
+        action="store_true",
+        help="one detrend window per trial duration",
+    )
     args = ap.parse_args(argv)
 
+    cfg = sr.SearchConfig(
+        detrend_method=args.detrend_method, detrend_per_duration=args.per_duration
+    )
+    cfg.validate()
     args.out.mkdir(parents=True, exist_ok=True)
     client = lc.s3_client()
     t0 = time.time()
@@ -178,6 +190,7 @@ def main(argv: list[str] | None = None) -> int:
                 targets[tic],
                 str(args.workdir),
                 args.keep_lc,
+                cfg,
             )
             for tic in sample
         ]
@@ -241,7 +254,7 @@ def main(argv: list[str] | None = None) -> int:
             "stars_with_any_signal": len({r.tic_id for r in quiet_rows}),
             "signals": len(quiet_rows),
         },
-        "search_config": sr.SearchConfig().to_dict(),
+        "search_config": cfg.to_dict(),
         "match_config": asdict(mt.MatchConfig()),
         "seconds": {
             "wall": wall,

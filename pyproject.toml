@@ -14,7 +14,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0", "ruff>=0.8.0"]
+wotan = ["wotan>=1.10"]   # biweight detrending (pulls numba)
+dev = ["pytest>=7.0", "ruff>=0.8.0", "wotan>=1.10"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
