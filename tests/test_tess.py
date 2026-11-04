@@ -423,3 +423,19 @@ def test_per_duration_window_removes_short_period_variability():
 def test_config_refuses_per_duration_factor_that_would_flatten():
     with pytest.raises(ValueError, match="flatten"):
         sr.SearchConfig(detrend_per_duration=True, detrend_window_factor=2.0).validate()
+
+
+def test_holdout_sample_shares_no_stars_and_keeps_snr_coverage():
+    from tesstransit import pilot
+
+    tces = [
+        mt.TCE(f"{i}-01", i, 1, 3.0, 1326.0, 2.0, None, float(i), None)
+        for i in range(1, 201)
+    ]
+    targets = {i: f"k{i}" for i in range(1, 401)}
+    dev, dev_q, _ = pilot.select_sample(tces, targets, 20, 10, seed=1)
+    ho, ho_q, _ = pilot.select_sample(
+        tces, targets, 20, 10, seed=2, exclude=frozenset(dev + dev_q)
+    )
+    assert not set(ho + ho_q) & set(dev + dev_q)
+    assert len(ho) == 20 and min(ho) < 20 and max(ho) > 180  # faint to strong

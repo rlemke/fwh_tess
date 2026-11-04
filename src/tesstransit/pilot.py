@@ -83,23 +83,39 @@ def _result_from_dict(d: dict[str, Any]) -> sr.SearchResult:
 
 
 def select_sample(
-    tces: list[mt.TCE], targets: dict[int, str], n_tce: int, n_quiet: int, seed: int
+    tces: list[mt.TCE],
+    targets: dict[int, str],
+    n_tce: int,
+    n_quiet: int,
+    seed: int,
+    exclude: frozenset[int] = frozenset(),
 ) -> tuple[list[int], list[int], list[int]]:
-    """``(tce_stars, quiet_stars, tce_stars_not_observed)``."""
+    """``(tce_stars, quiet_stars, tce_stars_not_observed)``.
+
+    With no ``exclude``: TCE stars at evenly spaced SNR ranks (deterministic;
+    the development sample). With ``exclude`` (a HOLD-OUT): stars in it are
+    removed, the rest split into ``n_tce`` contiguous SNR bins, and one star is
+    drawn per bin with ``seed`` -- the same SNR coverage, none of the stars.
+    """
     best: dict[int, float] = {}
     for t in tces:
         best[t.tic_id] = max(
             best.get(t.tic_id, -1.0), t.snr if t.snr is not None else -1.0
         )
     unobserved = sorted(tic for tic in best if tic not in targets)
-    ranked = sorted((tic for tic in best if tic in targets), key=lambda k: best[k])
+    ranked = sorted(
+        (tic for tic in best if tic in targets and tic not in exclude),
+        key=lambda k: best[k],
+    )
+    rng = np.random.default_rng(seed)
     if n_tce >= len(ranked):
         tce_stars = ranked
+    elif exclude:
+        tce_stars = sorted(int(rng.choice(b)) for b in np.array_split(ranked, n_tce))
     else:
         idx = np.unique(np.linspace(0, len(ranked) - 1, n_tce).round().astype(int))
         tce_stars = [ranked[i] for i in idx]
-    pool = sorted(set(targets) - set(best))
-    rng = np.random.default_rng(seed)
+    pool = sorted(set(targets) - set(best) - set(exclude))
     quiet = sorted(
         int(x) for x in rng.choice(pool, size=min(n_quiet, len(pool)), replace=False)
     )
@@ -146,6 +162,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--keep-lc", action="store_true")
     ap.add_argument(
+        "--holdout-of",
+        type=Path,
+        action="append",
+        default=[],
+        help="earlier run dir(s): draw a sample sharing none of their stars",
+    )
+    ap.add_argument(
         "--detrend-method", choices=["median", "biweight"], default="median"
     )
     ap.add_argument(
@@ -169,8 +192,13 @@ def main(argv: list[str] | None = None) -> int:
         f"manifest: {len(targets)} targets ({time.time() - t0:.0f}s)", file=sys.stderr
     )
     tces = mt.parse_tce_csv(args.tce_csv.read_text())
+    exclude = frozenset(
+        json.loads(line)["tic_id"]
+        for run in args.holdout_of
+        for line in (run / "results.jsonl").read_text().splitlines()
+    )
     tce_stars, quiet, unobserved = select_sample(
-        tces, targets, args.n_tce, args.n_quiet, args.seed
+        tces, targets, args.n_tce, args.n_quiet, args.seed, exclude
     )
     print(
         f"sample: {len(tce_stars)} TCE stars + {len(quiet)} quiet; "
@@ -242,6 +270,8 @@ def main(argv: list[str] | None = None) -> int:
     summary = {
         "sector": args.sector,
         "scope": "sampled stars only; TCEs on unsampled stars excluded",
+        "holdout_of": [str(p) for p in args.holdout_of],
+        "seed": args.seed,
         "sample": {
             "tce_stars": len(tce_stars),
             "quiet_stars": len(quiet),
