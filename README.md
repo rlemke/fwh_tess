@@ -37,6 +37,7 @@ Every term, field and outcome — ours and SPOC's `tce_*` columns — is defined
 | `_search.py` | running-median detrend + iterative BLS, durations capped by period (Kepler's law); every parameter in `SearchConfig`, which travels with the result |
 | `_manifest.py` | which stars the sector observed, from the bucket itself |
 | `pilot.py` | `python -m tesstransit.pilot` — stratified sample → search → match |
+| `planets.py` | `python -m tesstransit.planets` — every TOI in the sector → search → match against the TOI, with each ephemeris forced on our flux |
 | `_match.py` | the TCE table and the matching rules: `recovered` / `recovered_alias` / `missed` (with a cause) / `unmatched` |
 
 ## Thresholds are provisional

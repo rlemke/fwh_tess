@@ -275,6 +275,17 @@ def test_match_half_period_alias_checks_epoch_on_shorter_period():
     assert rows[0].bucket == "recovered_alias" and rows[0].alias == 0.5
 
 
+def test_match_reference_epoch_far_from_sector():
+    """A TOI epoch fitted ~350 orbits after the sector (measured: TOI 105.01)."""
+    from dataclasses import replace
+
+    tce = replace(
+        mt.parse_tce_csv(TCE_CSV)[1], period_days=2.184667, epoch_btjd=2084.58501
+    )
+    rows = mt.match_star(42, _result(42, [_sig(1, 2.18447, 1326.5086, 2.0)]), [tce])
+    assert rows[0].bucket == "recovered"
+
+
 def test_match_prefers_unaliased_signal():
     tce = mt.parse_tce_csv(TCE_CSV)[1]
     res = _result(42, [_sig(1, 7.4, 1326.1), _sig(2, 3.7, 1326.1)])
@@ -439,3 +450,78 @@ def test_holdout_sample_shares_no_stars_and_keeps_snr_coverage():
     )
     assert not set(ho + ho_q) & set(dev + dev_q)
     assert len(ho) == 20 and min(ho) < 20 and max(ho) > 180  # faint to strong
+
+
+# --- the planet (TOI) sample -------------------------------------------------
+
+_TOI_HEAD = (
+    "# TESS Objects of Interest\n"
+    "TIC,Full TOI ID,TOI Disposition,Orbital Epoch Value,Orbital Period (days) Value,"
+    "Transit Duration (hours) Value,Transit Depth Value,Sectors,Detection Pipeline(s)\n"
+)
+
+
+def test_parse_tois_sectors_bjd_and_single_transit():
+    from tesstransit import planets as pl
+
+    text = _TOI_HEAD + (
+        '42,101.01,CP,1326.1,3.7,3.0,1500,"[1, 27]",SPOC\n'
+        "42,101.02,PC,2458330.0,0,5.0,800,[1],QLP\n"
+    )
+    a, b = pl.parse_tois(text)
+    assert a.sectors == (1, 27) and a.epoch_btjd == 1326.1
+    assert b.epoch_btjd == pytest.approx(1330.0)  # BJD converted, not mis-phased
+    assert b.period_days is None  # single transit: not searchable
+    assert a.as_tce().planet_num == 1 and b.as_tce().planet_num == 2
+
+
+def test_forced_stats_separates_absent_from_present():
+    from tesstransit import pilot
+
+    t, f = _sector(planets=[(3.7, 1326.1, 3.0, 1500.0)])
+    out = pilot.forced_stats(
+        t, f, [("real", 3.7, 1326.1, 3.0), ("absent", 5.3, 1327.0, 3.0),
+               ("long", 60.0, 1420.0, 3.0)], sr.SearchConfig()
+    )  # fmt: skip
+    assert out["real"]["snr_red"] > 20 and out["real"]["n_transits"] >= 6
+    assert abs(out["absent"]["snr_red"]) < 5
+    assert out["long"]["n_transits"] == 0 and out["long"]["snr_red"] is None
+
+
+def test_classify_does_not_blame_the_search_for_absent_signals():
+    from tesstransit import planets as pl
+
+    cfg = sr.SearchConfig()
+    toi = pl.TOI("1.01", 42, "PC", 5.0, 1326.0, 3.0, 500.0, (1,), "SPOC")
+    miss = mt.MatchRow(42, "missed", tce=toi.as_tce(), cause="not_detected")
+    assert pl.classify(toi, None, None, cfg) == "not_searched"
+    single = pl.TOI("1.02", 42, "PC", None, 1326.0, 3.0, 500.0, (1,), "SPOC")
+    assert pl.classify(single, None, None, cfg) == "single_transit"
+    assert pl.classify(toi, miss, {"n_transits": 1, "snr_red": 30.0}, cfg) == (
+        "weak_in_sector:few_transits"
+    )
+    assert pl.classify(toi, miss, {"n_transits": 5, "snr_red": 4.0}, cfg) == (
+        "weak_in_sector:low_forced_snr"
+    )
+    # SPOC saw it in this sector: the signal is in the data and WE lost it.
+    assert pl.classify(toi, miss, {"n_transits": 5, "snr_red": 4.0}, cfg, 25.0) == (
+        "missed:weak_after_detrend"
+    )
+    assert pl.classify(toi, miss, {"n_transits": 5, "snr_red": 12.0}, cfg) == (
+        "missed:not_detected"
+    )
+    hit = mt.MatchRow(42, "recovered", tce=toi.as_tce())
+    assert pl.classify(toi, hit, None, cfg) == "recovered"
+
+
+def test_local_ephemeris_keeps_toi_period_takes_tce_epoch():
+    from tesstransit import planets as pl
+
+    toi = pl.TOI("121.01", 42, "PC", 14.77411, 2074.329, 5.5, 15000.0, (1,), "SPOC",
+                 period_err=0.00057, epoch_err=0.013)  # fmt: skip
+    tce = mt.TCE("x-01", 42, 1, 2 * 14.7748, 1336.14, 5.4, 15000.0, 150.0, 2)
+    loc = pl.local_ephemeris(toi, tce)
+    assert loc.period_days == 14.77411 and loc.epoch_btjd == 1336.14
+    assert loc.epoch_source == "tce" and pl.local_ephemeris(toi, None) is toi
+    # 50 orbits back: sqrt(0.013^2 + (50 * 0.00057)^2) d
+    assert pl.epoch_sigma_hours(toi, 1338.0) == pytest.approx(0.7516, rel=1e-3)

@@ -46,8 +46,46 @@ from . import _search as sr
 _client: Any = None
 
 
+def forced_stats(
+    time_: np.ndarray,
+    flux: np.ndarray,
+    ephemerides: list[tuple[str, float, float, float]],
+    cfg: sr.SearchConfig,
+) -> dict[str, dict[str, Any]]:
+    """Each known ephemeris measured on the light curve exactly as the search sees it.
+
+    ``ephemerides`` are ``(name, period_d, epoch_btjd, duration_h)``. The flux
+    is detrended with the search's own settings, so a transit the detrend
+    erases shows up here as a low SNR: that separates "not in the data we
+    search" from "in the data, and the search did not find it".
+    """
+    f = sr.detrend(time_, flux, cfg.detrend_window_days, cfg.detrend_method)
+    ok = np.isfinite(f)
+    t, f = time_[ok], f[ok]
+    out: dict[str, dict[str, Any]] = {}
+    for name, period, epoch, dur_h in ephemerides:
+        dur = dur_h / 24.0
+        n = sr._n_transits(t, period, epoch, dur)
+        rec: dict[str, Any] = {"n_transits": n, "snr_red": None, "depth_ppm": None}
+        if n:
+            try:
+                ev = sr.event_stats(t, f, period, epoch, dur)
+                rec["snr_red"] = float(ev.snr_red)
+                rec["depth_ppm"] = float(np.average(ev.depths) * 1e6)
+            except ValueError as exc:  # too few bins for a very long duration
+                rec["error"] = str(exc)
+        out[name] = rec
+    return out
+
+
 def _search_one(
-    tic: int, sector: int, key: str, workdir: str, keep: bool, cfg: sr.SearchConfig
+    tic: int,
+    sector: int,
+    key: str,
+    workdir: str,
+    keep: bool,
+    cfg: sr.SearchConfig,
+    forced: list[tuple[str, float, float, float]] | None = None,
 ) -> dict[str, Any]:
     global _client
     if _client is None:
@@ -58,17 +96,24 @@ def _search_one(
         t_fetch = time.time() - t0
         curve = lc.load_lc(path)
         res = sr.search(curve.time, curve.flux, tic, sector, cfg)
+        extra = (
+            {"forced": forced_stats(curve.time, curve.flux, forced, cfg)}
+            if forced
+            else {}
+        )
         if not keep:
             path.unlink()
         return {
             "tic_id": tic,
             "ok": True,
+            **extra,
             "result": asdict(res),
             "mask": {
                 "n_cadences": curve.n_cadences,
                 "n_flagged": curve.n_flagged,
                 "n_nonfinite": curve.n_nonfinite,
             },
+            "t_span": [float(curve.time[0]), float(curve.time[-1])],
             "seconds": {"fetch": t_fetch, "total": time.time() - t0},
         }
     except Exception as exc:  # noqa: BLE001 — recorded per star, never swallowed

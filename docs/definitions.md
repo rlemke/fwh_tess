@@ -30,7 +30,8 @@ Where a definition could not be traced to a source, it says so.
 | **TPS** | Transiting Planet Search — SPOC's search: a wavelet-based adaptive matched filter. **Not** what we use. |
 | **DV** | Data Validation — the SPOC stage that fits and tests every TCE; the source of the TCE table. |
 | **TCE** | Threshold Crossing Event: a periodic signal in one star's light curve that SPOC's TPS search found above its detection threshold (7.1σ MES) and passed to DV. **A TCE is a detection, not a planet** — many are eclipsing binaries or systematics. |
-| **TOI** | TESS Object of Interest: a TCE (or a QLP detection) that human vetters promoted to a candidate. Context only here, never the reference. |
+| **TOI** | TESS Object of Interest: a TCE (or a QLP detection) that human vetters promoted to a candidate. The reference of the planet sample (§3.6), context everywhere else. |
+| **Disposition** | A TOI's vetting outcome: **CP** confirmed planet, **KP** known planet (published before TESS), **PC** planet candidate; **EB** eclipsing binary, **V** stellar variability, **IS** instrumental, **FP/FA** false positive / alarm. *Planet-like* = CP, KP, PC. |
 | **MES** | Multiple Event Statistic — TPS's detection statistic for a folded, multi-transit signal. Not computed by us; comparable to our SNR in purpose only. |
 | **BLS** | Box Least Squares — fits a flat-bottomed box dip at each trial period, epoch and duration. **Our** search. |
 | **EB** | Eclipsing binary — two stars eclipsing each other. Deep dips (often > 1%), frequently a primary + secondary eclipse, which makes period aliases common. |
@@ -148,11 +149,15 @@ All of:
 1. **Same star** (TIC ID).
 2. **Period**: `|P_ours / (k · P_TCE) − 1| ≤ period_rel_tol` (0.5%), for some
    `k` in the alias set {1, 2, ½, 3, ⅓}.
-3. **Epoch**: the offset between the two epochs, wrapped by the **shorter** of
-   the two periods, is within `epoch_tol_durations` (0.5) × the longer of the
+3. **Epoch**: the reference epoch is first propagated, with the reference's
+   own period, to its transit nearest ours; the offset is then wrapped by the
+   **shorter** of the two periods and must be within `epoch_tol_durations` (0.5) × the longer of the
    two durations. Wrapping by the shorter period is what makes aliases work:
    at 2× every one of our transits is a TCE transit; at ½× every TCE transit
-   is one of ours.
+   is one of ours. (Wrapping the raw offset without propagating drifts by the
+   period error × the cycle count: TOI epochs ~350 orbits from the sector put
+   hot Jupiters found at SNR 340 hours "off". Harmless for TCEs, whose epochs
+   lie in the sector.)
 
 Assignment, per star: **direct matches (k = 1) are assigned across all TCEs
 first, aliases only after**, each to the strongest free signal. Each signal
@@ -189,6 +194,28 @@ TCE's period), `0.5` (half), `3.0`, `0.333…`.
 |---|---|
 | `tce` | Stars with ≥ 1 SPOC TCE, chosen evenly across SPOC's SNR range so recovery is measured from the faintest TCEs to the strongest. |
 | `quiet` | A seeded random draw of observed stars with **no** TCE. Any signal here is something SPOC rejected or our false alarm — the group that calibrates the thresholds. |
+
+### 3.6 Planet sample (`python -m tesstransit.planets`) — one outcome per TOI
+
+Every TOI listing the sector, on a star with a 2-minute light curve there.
+
+| Column | Meaning |
+|---|---|
+| `tce_backed` | The sector TCE at (an alias of) the TOI's period, within 1%. Empty = SPOC made no TCE for it in this sector; the TOI came from more data or another pipeline (QLP). |
+| `epoch_source` | `tce`: the TOI's period with SPOC's in-sector epoch. `toi`: the catalogue epoch, propagated. (TOI 121.01's catalogue ephemeris lands 12.4 h from its sector-1 transits.) |
+| `epoch_sigma_h`, `epoch_uncertain` | For `toi`-source epochs: the catalogue uncertainty propagated to mid-sector, √(σ_t0² + (n·σ_P)²); flagged when above the match tolerance. |
+| `forced_n_transits`, `forced_snr` | The known ephemeris measured on **our** detrended flux: transits with data, red-noise SNR. An upper bound on what a blind search can reach. |
+
+| `outcome` | Meaning |
+|---|---|
+| `recovered`, `recovered_alias` | As §3.2, against the TOI. |
+| `missed:not_detected`, `missed:search_exhausted` | In the data by the forced measurement (≥ 2 transits, forced SNR ≥ 7.1), not found. |
+| `missed:weak_after_detrend` | Forced SNR < 7.1 on our flux, but SPOC detected it in **this sector** at SNR ≥ 7.1: the signal is in the data and our detrending lost it. A search failure, not a data limit. |
+| `weak_in_sector:few_transits` | Fewer than 2 transits with data in this sector. |
+| `weak_in_sector:low_forced_snr` | Below threshold even at the known ephemeris, and no SPOC detection in this sector says otherwise. |
+| `outside_search_grid` | Period outside 0.25–26 d. |
+| `single_transit` | The TOI has no period. |
+| `not_searched` | The star's search failed. |
 
 ---
 

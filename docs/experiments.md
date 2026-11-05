@@ -107,3 +107,63 @@ a false alarm (vetting also uses later sectors), and seven TOIs are far too
 few to quote a planet recovery rate — the sample was drawn across TCE SNR, not
 across planets. Recovery against TCEs measures pipeline agreement; recovery
 against TOIs is what bears on planets, and needs a sample built for it.
+
+## Planet sample: every sector-1 TOI (2026-11-04)
+
+`python -m tesstransit.planets --sector 1` — pilot-5 configuration, no tuning.
+445 TOIs list sector 1; **230 are on 186 stars with a 2-minute light curve**,
+and all 186 were searched (0 failures, 143 s on 8 workers). Each TOI is
+matched against its own ephemeris and measured at it ("forced") on our
+detrended flux; outcomes are defined in [definitions.md §3.6](definitions.md).
+
+| Planet-like TOIs (CP, KP, PC) | n | Recovered | Missed, in data | Weak in sector | Outside grid / single |
+|---|---|---|---|---|---|
+| SPOC made a sector-1 TCE | 64 | **59 (92%)** | 5 | 0 | 0 |
+| No sector-1 TCE | 138 | 3 | 1 | 84 | 45 + 5 |
+
+**Against planets, the search recovers 92% of what SPOC detected in the same
+sector, against 41% of raw TCEs.** CP + KP: 36 of 38; PC: 23 of 26. Of 28
+EB / V / IS TOIs, 14 recovered (1 as an alias), 9 weak, 5 outside the grid.
+
+The five TCE-backed misses:
+
+| TOI | SPOC SNR | Forced SNR (ours) | Outcome | Reading |
+|---|---|---|---|---|
+| 200.01 (DS Tuc Ab, CP) | 25.4 | 0.9 | weak_after_detrend | Young, active star; the 1-day median leaves variability that swamps a 3.3 h transit. Our search reported three rotation residues at SNR 85–144 instead. |
+| 140.01 (PC) | 11.5 | 2.8 | weak_after_detrend | A 1.12 d variable on the same star (SNR 55) dominates the noise. |
+| 119.01 (PC) | 8.0 | 5.7 | weak_after_detrend | Near threshold in both pipelines. |
+| 210.01 (PC) | 7.9 | 6.8 | weak_after_detrend | Near threshold in both pipelines. |
+| 139.01 (CP) | 10.5 | 7.2 | not_detected | Two transits; our strongest peak was 14.3 d. |
+
+So the remaining planet losses are **stellar variability, not the grid or the
+thresholds**: the two clear ones are active or variable stars where SPOC's
+detrending keeps a transit ours erases. That points at detrending that models
+the star (e.g. a GP or iterative masked fit) rather than at the search.
+
+Without a sector-1 TCE, almost nothing is in the sector-1 data — 84 of 88
+in-grid TOIs are weak in the sector by our own forced measurement, which is
+why SPOC needed more sectors for them. Of the 4 that are not, we recovered
+3 that SPOC's sector-1 run did not make TCEs for (TOI 209.01, 487.02,
+708.01, at our SNR ≥ 7.1 though forced 5.7–7.0 — near threshold) and missed
+TOI 174.01 (CP, 2 transits, forced 11.3), which SPOC also missed in sector 1.
+
+⚠️ Caveats. The forced SNR is measured at the known ephemeris, an upper bound
+for a blind search. "Weak in sector" uses OUR noise model, which is the thing
+that failed on DS Tuc; only where SPOC detected the TOI in this sector can a
+low forced SNR be called our loss. 52 signals on these stars match no TOI;
+they are unvetted. One sector, 64 TCE-backed planet-like TOIs: a 92% rate has
+a binomial 1σ of about ±3.4 points.
+
+### Two bugs the planet sample found
+
+1. **Matcher epoch drift.** `_alias_of` wrapped the raw epoch offset by our
+   period; with a TOI epoch ~350 orbits away, a 0.01% period difference
+   became hours. Hot Jupiters found at SNR 340 were "not detected" (15 of 64
+   TCE-backed TOIs). The reference epoch is now propagated with its own
+   period first. Re-matching pilot 5 and the hold-out gives identical counts,
+   as expected for in-sector TCE epochs.
+2. **Catalogue ephemerides don't always reach back.** TOI 121.01's
+   ephemeris, propagated 50 orbits, lands 12.4 h from transits both
+   pipelines found. TCE-backed TOIs now use SPOC's in-sector epoch with the
+   TOI period; others keep the catalogue epoch with its propagated
+   uncertainty reported (1 of 151 exceeds the match tolerance).

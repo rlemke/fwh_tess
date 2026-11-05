@@ -116,10 +116,16 @@ def _alias_of(sig: Signal, tce: TCE, cfg: MatchConfig) -> float | None:
         rel = abs(sig.period_days / (k * tce.period_days) - 1.0)
         if rel > cfg.period_rel_tol:
             continue
-        # Wrap the epoch offset by the SHORTER period: at 2x every one of our
-        # transits is a TCE transit; at 1/2x every TCE transit is one of ours.
+        # Propagate the reference epoch with ITS OWN period to the transit
+        # nearest ours, then wrap the offset by the SHORTER period: at 2x every
+        # one of our transits is a TCE transit; at 1/2x every TCE transit is
+        # one of ours. Wrapping the raw offset by our period instead drifts by
+        # the period error times the cycle count: a TOI epoch ~350 orbits from
+        # the sector put hot Jupiters found at SNR 340 hours off (measured).
+        n = round((sig.epoch_btjd - tce.epoch_btjd) / tce.period_days)
+        ref = tce.epoch_btjd + n * tce.period_days
         wrap = min(sig.period_days, tce.period_days)
-        dt = (sig.epoch_btjd - tce.epoch_btjd + 0.5 * wrap) % wrap - 0.5 * wrap
+        dt = (sig.epoch_btjd - ref + 0.5 * wrap) % wrap - 0.5 * wrap
         tol = (
             cfg.epoch_tol_durations * max(sig.duration_hours, tce.duration_hours) / 24.0
         )
