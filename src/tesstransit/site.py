@@ -3,10 +3,15 @@
 Usage::
 
     python -m tesstransit.site --runs /path/to/runs --workdir /path/to/scratch \\
-        --planets planets-spline7a --dev dev-spline7a --holdout holdout-spline7a \\
+        --planets 1=planets-spline7a-v2 --planets 2=s2-planets-v2 \\
+        --sample 1=Development=dev-spline7a --sample 1=Hold-out=holdout-spline7a \\
+        --sample 2=Sample=s2-pilot \\
         --variant "Pilot 5|1-day running median|planets-s1|pilot5-veto-fixed|holdout-seed2" \\
         --variant "7a|Cubic spline, knots by BIC|planets-spline7a|dev-spline7a|holdout-spline7a" \\
         --default 7a --out /path/to/site/tess-sector1
+
+Every row carries its ``sector``; the ``--variant`` detrending scorecards are
+sector-1 experiments.
 
 Writes one self-contained ``index.html``: the data is embedded, and only d3
 and the fonts load from a CDN. It is the same page as the results dashboard,
@@ -14,7 +19,7 @@ over a fixed snapshot of the named runs.
 
 Sky positions are not in the run outputs: each star's RA/Dec comes from the
 primary header of its light curve (``RA_OBJ``/``DEC_OBJ``), read with one
-ranged GET of the first 14 KB, and cached in ``<workdir>/coords-s0001.json``.
+ranged GET of the first 14 KB, and cached in ``<workdir>/coords-s000N.json``.
 """
 
 from __future__ import annotations
@@ -41,7 +46,7 @@ def _group(outcome: str) -> str:
     if outcome.startswith("missed"):
         return "Missed"
     if outcome.startswith("weak_in_sector"):
-        return "Too weak in sector 1"
+        return "Too weak in one sector"
     if outcome == "outside_search_grid":
         return "Period outside search"
     if outcome == "single_transit":
@@ -83,15 +88,18 @@ def star_coords(
     return have
 
 
-def toi_rows(run: Path, pos: dict[int, tuple[float, float]]) -> list[dict[str, str]]:
+def toi_rows(
+    sector: int, run: Path, pos: dict[tuple[int, int], tuple[float, float]]
+) -> list[dict[str, str]]:
     out = []
     for r in csv.DictReader((run / "tois.csv").open()):
-        ra, dec = pos[int(r["tic_id"])]
+        ra, dec = pos[(sector, int(r["tic_id"]))]
         out.append({
+            "sector": str(sector),
             "toi": r["toi"], "tic_id": r["tic_id"], "ra": _r(ra, 4), "dec": _r(dec, 4),
             "disposition": r["disposition"],
             "planet_like": "yes" if r["planet_like"] == "True" else "no",
-            "sector1_tce": "yes" if r["tce_backed"] else "no",
+            "sector_tce": "yes" if r["tce_backed"] else "no",
             "period_days": _r(r["period_days"], 4), "depth_ppm": _r(r["depth_ppm"], 0),
             "duration_hours": _r(r["duration_hours"], 2),
             "forced_snr": _r(r["forced_snr"], 1), "our_snr": _r(r["sig_snr"], 1),
@@ -101,18 +109,19 @@ def toi_rows(run: Path, pos: dict[int, tuple[float, float]]) -> list[dict[str, s
 
 
 def sample_rows(
-    runs: list[tuple[str, Path]], pos: dict[int, tuple[float, float]]
+    runs: list[tuple[int, str, Path]], pos: dict[tuple[int, int], tuple[float, float]]
 ) -> list[dict[str, str]]:
     """Every TCE, every no-TCE signal, and every no-TCE star with no signal."""
     out = []
-    for sample, run in runs:
+    for sector, sample, run in runs:
         matches = list(csv.DictReader((run / "matches.csv").open()))
         tce_stars = {int(r["tic_id"]) for r in matches if r["group"] == "tce"}
         with_signal = set()
         for r in matches:
             tic = int(r["tic_id"])
-            ra, dec = pos[tic]
+            ra, dec = pos[(sector, tic)]
             base = {
+                "sector": str(sector),
                 "sample": sample,
                 "tic_id": str(tic),
                 "ra": _r(ra, 4),
@@ -142,8 +151,8 @@ def sample_rows(
             tic = json.loads(line)["tic_id"]
             if tic in tce_stars or tic in with_signal:
                 continue
-            ra, dec = pos[tic]
-            out.append({"sample": sample, "tic_id": str(tic), "ra": _r(ra, 4),
+            ra, dec = pos[(sector, tic)]
+            out.append({"sector": str(sector), "sample": sample, "tic_id": str(tic), "ra": _r(ra, 4),
                         "dec": _r(dec, 4), "kind": "No-TCE star", "tce_id": "",
                         "period_days": "", "depth_ppm": "", "spoc_snr": "", "our_snr": "",
                         "bucket": "", "toi_disposition": "", "status": "No signal"})  # fmt: skip
@@ -198,16 +207,21 @@ def render(data: dict[str, Any], built: str) -> str:
     return page.replace("/*__DATA__*/null", blob).replace("/*__BUILT__*/", built)
 
 
+def _split(values: list[str], parts: int, flag: str) -> list[list[str]]:
+    out = [v.split("=") for v in values]
+    if any(len(v) != parts for v in out):
+        raise SystemExit(f"{flag} expects {parts} '='-separated parts, got {values}")
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--runs", type=Path, required=True)
     ap.add_argument(
-        "--workdir", type=Path, required=True, help="manifest + coords cache"
+        "--workdir", type=Path, required=True, help="manifests + coords caches"
     )
-    ap.add_argument("--sector", type=int, default=1)
-    ap.add_argument("--planets", required=True)
-    ap.add_argument("--dev", required=True)
-    ap.add_argument("--holdout", required=True)
+    ap.add_argument("--planets", action="append", required=True, help="SECTOR=RUN")
+    ap.add_argument("--sample", action="append", required=True, help="SECTOR=LABEL=RUN")
     ap.add_argument("--variant", action="append", default=[], required=True)
     ap.add_argument("--default", required=True)
     ap.add_argument("--out", type=Path, required=True)
@@ -216,25 +230,33 @@ def main(argv: list[str] | None = None) -> int:
     variants = [v.split("|") for v in args.variant]
     if any(len(v) != 5 for v in variants):
         raise SystemExit("--variant is name|detrending|planets-run|dev-run|holdout-run")
+    planets = [(int(s), args.runs / r) for s, r in _split(args.planets, 2, "--planets")]
+    samples = [
+        (int(s), lbl, args.runs / r) for s, lbl, r in _split(args.sample, 3, "--sample")
+    ]
     client = lc.s3_client()
-    targets = mf.load_or_list(
-        client, args.sector, args.workdir / f"manifest-s{args.sector:04d}.json"
-    )
-    runs = {k: args.runs / v for k, v in
-            (("planets", args.planets), ("dev", args.dev), ("holdout", args.holdout))}  # fmt: skip
-    tics = {
-        json.loads(line)["tic_id"]
-        for run in runs.values()
-        for line in (run / "results.jsonl").read_text().splitlines()
-    }
-    pos = star_coords(
-        client, targets, tics, args.workdir / f"coords-s{args.sector:04d}.json"
-    )
+    pos: dict[tuple[int, int], tuple[float, float]] = {}
+    for sector in sorted({s for s, _ in planets} | {s for s, _, _ in samples}):
+        runs = [r for s, r in planets if s == sector]
+        runs += [r for s, _, r in samples if s == sector]
+        tics = {
+            json.loads(line)["tic_id"]
+            for run in runs
+            for line in (run / "results.jsonl").read_text().splitlines()
+        }
+        targets = mf.load_or_list(
+            client, sector, args.workdir / f"manifest-s{sector:04d}.json"
+        )
+        cache = args.workdir / f"coords-s{sector:04d}.json"
+        pos.update(
+            {
+                (sector, t): v
+                for t, v in star_coords(client, targets, tics, cache).items()
+            }
+        )
     data = {
-        "tois": toi_rows(runs["planets"], pos),
-        "tce_sample": sample_rows(
-            [("Development", runs["dev"]), ("Hold-out", runs["holdout"])], pos
-        ),
+        "tois": [row for sector, run in planets for row in toi_rows(sector, run, pos)],
+        "tce_sample": sample_rows(samples, pos),
         "variants": variant_rows(args.runs, variants, args.default),
     }
     built = datetime.now(UTC).strftime("%Y-%m-%d")

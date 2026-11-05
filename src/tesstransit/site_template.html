@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TESS sector 1 re-search</title>
+<title>TESS sectors 1–2 re-search</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,400&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
@@ -86,6 +86,12 @@
   .tx-tile { display: flex; flex-direction: column; justify-content: space-between; gap: var(--cds-gap-sm); }
   .tx-tile .lbl { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
   .tx-tile .num { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); font-variant-numeric: tabular-nums; }
+  .tx-rows { display: flex; flex-direction: column; gap: var(--cds-gap-xs); }
+  .tx-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--cds-gap-sm); }
+  .tx-row .sec { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .tx-tilenote { margin: calc(-1 * var(--cds-gap-sm)) 0 0; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); max-width: 78ch; }
+  .tx-barlabel { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .tx-bar.tx-sectorbar { justify-content: flex-start; }
   .tx-tile .of { font-family: var(--font-anthropic-sans); font-size: var(--cds-font-size-body); color: var(--color-fg-muted); }
   .tx-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 30rem), 1fr)); gap: var(--cds-gap-md); }
   .tx-card { display: flex; flex-direction: column; gap: var(--cds-gap-sm); }
@@ -122,32 +128,60 @@
 
 <div class="tx">
   <header class="tx-head">
-    <h1 id="title">TESS sector 1 re-search</h1>
-    <p>An independent box-least-squares search of TESS 2-minute light curves, compared with NASA's SPOC pipeline. Of the planets and planet candidates SPOC detected in sector 1, it finds <b data-draw="h-rec" data-source="headline" data-field="recovered">—</b> of <b data-draw="h-tot" data-source="headline" data-field="total">—</b>. Of all SPOC detections it finds only <b><span data-draw="t-pct" data-source="tce_rate" data-field="percent">—</span>%</b>, because most of what it misses never became a planet candidate.</p>
+    <h1 id="title">TESS re-search, sectors 1 and 2</h1>
+    <p>An independent box-least-squares search of TESS 2-minute light curves, compared with NASA's SPOC pipeline, in sectors 1 and 2. Of the planets and planet candidates SPOC detected in the same sector, it finds <b data-draw="hl" data-source="headline" data-field="recovered">—</b> of <b data-draw="hl" data-source="headline" data-field="total">—</b>, including <b data-draw="hl" data-source="headline" data-field="cpkp_recovered">—</b> of <b data-draw="hl" data-source="headline" data-field="cpkp_total">—</b> confirmed or known planets. Of all SPOC detections in its samples it finds only <b><span data-draw="hl" data-source="headline" data-field="percent">—</span>%</b>, because most of what it misses never became a planet candidate.</p>
   </header>
 
-  <section class="tx-tiles" aria-label="Headline figures">
+  <section class="tx-tiles" aria-label="Headline figures by sector">
     <div class="tx-tile">
-      <span class="lbl">Planets and candidates SPOC detected in sector 1, found again</span>
-      <span class="num"><span data-draw="h-rec2" data-source="headline" data-field="recovered">—</span> <span class="of">of <span data-draw="h-tot2" data-source="headline" data-field="total">—</span></span></span>
+      <span class="lbl">Planets and candidates SPOC detected in the sector, found again</span>
+      <div class="tx-rows">
+        <div class="tx-row"><span class="sec">Sector 1</span><span class="num"><span data-draw="bs" data-source="by_sector" data-field="planets_found" data-where="sector=1">—</span> <span class="of">of <span data-draw="bs" data-source="by_sector" data-field="planets_total" data-where="sector=1">—</span></span></span></div>
+        <div class="tx-row"><span class="sec">Sector 2</span><span class="num"><span data-draw="bs" data-source="by_sector" data-field="planets_found" data-where="sector=2">—</span> <span class="of">of <span data-draw="bs" data-source="by_sector" data-field="planets_total" data-where="sector=2">—</span></span></span></div>
+      </div>
     </div>
     <div class="tx-tile">
       <span class="lbl">Confirmed or known planets among them, found again</span>
-      <span class="num"><span data-draw="c-rec" data-source="headline" data-field="cpkp_recovered">—</span> <span class="of">of <span data-draw="c-tot" data-source="headline" data-field="cpkp_total">—</span></span></span>
+      <div class="tx-rows">
+        <div class="tx-row"><span class="sec">Sector 1</span><span class="num"><span data-draw="bs" data-source="by_sector" data-field="confirmed_found" data-where="sector=1">—</span> <span class="of">of <span data-draw="bs" data-source="by_sector" data-field="confirmed_total" data-where="sector=1">—</span></span></span></div>
+        <div class="tx-row"><span class="sec">Sector 2</span><span class="num"><span data-draw="bs" data-source="by_sector" data-field="confirmed_found" data-where="sector=2">—</span> <span class="of">of <span data-draw="bs" data-source="by_sector" data-field="confirmed_total" data-where="sector=2">—</span></span></span></div>
+      </div>
     </div>
     <div class="tx-tile">
-      <span class="lbl">All SPOC detections in the search's period range, found again (development and hold-out samples)</span>
-      <span class="num"><span data-draw="t-rec" data-source="tce_rate" data-field="recovered">—</span> <span class="of">of <span data-draw="t-tot" data-source="tce_rate" data-field="in_range">—</span></span></span>
+      <span class="lbl">Planets and candidates SPOC made no TCE for in the sector, found</span>
+      <div class="tx-rows">
+        <div class="tx-row"><span class="sec">Sector 1</span><span class="num"><span data-draw="bs" data-source="by_sector" data-field="notce_found" data-where="sector=1">—</span> <span class="of">of <span data-draw="bs" data-source="by_sector" data-field="notce_in_data" data-where="sector=1">—</span></span></span></div>
+        <div class="tx-row"><span class="sec">Sector 2</span><span class="num"><span data-draw="bs" data-source="by_sector" data-field="notce_found" data-where="sector=2">—</span> <span class="of">of <span data-draw="bs" data-source="by_sector" data-field="notce_in_data" data-where="sector=2">—</span></span></span></div>
+      </div>
+    </div>
+    <div class="tx-tile">
+      <span class="lbl">SPOC detections in the search's period range, found again (TCE samples)</span>
+      <div class="tx-rows">
+        <div class="tx-row"><span class="sec">Sector 1</span><span class="num"><span data-draw="bs" data-source="by_sector" data-field="tces_found" data-where="sector=1">—</span> <span class="of">of <span data-draw="bs" data-source="by_sector" data-field="tces_in_range" data-where="sector=1">—</span></span></span></div>
+        <div class="tx-row"><span class="sec">Sector 2</span><span class="num"><span data-draw="bs" data-source="by_sector" data-field="tces_found" data-where="sector=2">—</span> <span class="of">of <span data-draw="bs" data-source="by_sector" data-field="tces_in_range" data-where="sector=2">—</span></span></span></div>
+      </div>
     </div>
     <div class="tx-tile">
       <span class="lbl">Stars with no SPOC detection where the search reports a signal</span>
-      <span class="num"><span data-draw="q-sig" data-source="tce_rate" data-field="quiet_with_signal">—</span> <span class="of">of <span data-draw="q-tot" data-source="tce_rate" data-field="quiet_stars">—</span></span></span>
+      <div class="tx-rows">
+        <div class="tx-row"><span class="sec">Sector 1</span><span class="num"><span data-draw="bs" data-source="by_sector" data-field="quiet_signal" data-where="sector=1">—</span> <span class="of">of <span data-draw="bs" data-source="by_sector" data-field="quiet_stars" data-where="sector=1">—</span></span></span></div>
+        <div class="tx-row"><span class="sec">Sector 2</span><span class="num"><span data-draw="bs" data-source="by_sector" data-field="quiet_signal" data-where="sector=2">—</span> <span class="of">of <span data-draw="bs" data-source="by_sector" data-field="quiet_stars" data-where="sector=2">—</span></span></span></div>
+      </div>
     </div>
   </section>
+  <p class="tx-tilenote">"Made no TCE for" counts only candidates whose transit is strong enough in that one sector, measured at the known ephemeris on the search's own flux.</p>
+
+  <div class="tx-bar tx-sectorbar">
+    <span class="tx-barlabel" id="sector-label">Charts and sky map show</span>
+    <div class="tx-toggle" role="group" aria-labelledby="sector-label">
+      <button type="button" data-sector="1" aria-pressed="true">Sector 1</button>
+      <button type="button" data-sector="2" aria-pressed="false">Sector 2</button>
+    </div>
+  </div>
 
   <section class="tx-grid">
     <div class="tx-card" id="period-depth">
-      <h2>Period and depth of every sector 1 TOI</h2>
+      <h2>Period and depth of every TOI in the sector</h2>
       <p class="note">Each point is one TESS Object of Interest on a star with a 2-minute light curve. The shaded band is the period range the search covers: two transits must fit in one ~27-day sector. Filled points are planets or candidates; hollow points are eclipsing binaries and other false positives.</p>
       <div class="tx-bar">
         <div class="tx-toggle" role="group" aria-label="Which TOIs">
@@ -157,7 +191,7 @@
         <ul class="tx-legend">
           <li><span class="tx-sw" data-group="Recovered"></span>Found again</li>
           <li><span class="tx-sw" data-group="Missed"></span>Missed</li>
-          <li><span class="tx-sw" data-group="Too weak in sector 1"></span>Too weak in sector 1</li>
+          <li><span class="tx-sw" data-group="Too weak in one sector"></span>Too weak in one sector</li>
           <li><span class="tx-sw" data-group="Period outside search"></span>Period outside search</li>
           <li><span class="tx-sw" data-group="Single transit"></span>Single transit</li>
         </ul>
@@ -167,7 +201,7 @@
 
     <div class="tx-card" id="sky-map">
       <h2>Where the stars are</h2>
-      <p class="note">Every searched star, on the sky around sector 1's field (orthographic, north up, right ascension increasing to the left as seen from Earth). Dashed lines mark declination every 10° and right ascension every 2 hours.</p>
+      <p class="note">Every searched star, on the sky around the selected sector's field (orthographic, north up, right ascension increasing to the left as seen from Earth). Dashed lines mark declination every 10° and right ascension every 2 hours.</p>
       <div class="tx-bar">
         <div class="tx-toggle" role="group" aria-label="Which sample">
           <button type="button" data-sky="tois" aria-pressed="true">TOI sample</button>
@@ -176,7 +210,7 @@
         <ul class="tx-legend" data-legend="tois">
           <li><span class="tx-sw" data-group="Recovered"></span>Found again</li>
           <li><span class="tx-sw" data-group="Missed"></span>Missed</li>
-          <li><span class="tx-sw" data-group="Too weak in sector 1"></span>Too weak</li>
+          <li><span class="tx-sw" data-group="Too weak in one sector"></span>Too weak</li>
           <li><span class="tx-sw" data-group="Period outside search"></span>Period outside search</li>
           <li><span class="tx-sw" data-group="Single transit"></span>Single transit</li>
         </ul>
@@ -193,8 +227,8 @@
   </section>
 
   <section class="tx-card" id="experiments">
-    <h2>Detrending experiments</h2>
-    <p class="note">Each version of the search scored on all three samples. Variant 7a, a cubic spline whose knot spacing is chosen for each star, is the current default: it finds more planets and roughly halves the signals on stars with no SPOC detection. TCE counts are those in the search's period range.</p>
+    <h2>Detrending experiments (sector 1)</h2>
+    <p class="note">Each version of the search scored on sector 1's three samples, before sector 2 was run. Variant 7a, a cubic spline whose knot spacing is chosen for each star, is the current default: it finds more planets and roughly halves the signals on stars with no SPOC detection. TCE counts are those in the search's period range.</p>
     <div class="tx-wrap">
       <table data-source="variants" data-row-key="variant">
         <thead>
@@ -218,12 +252,13 @@
   </section>
 
   <section class="tx-card" id="missed">
-    <h2>Planets SPOC found that the search still misses</h2>
+    <h2>Planets SPOC found in the same sector that the search still misses</h2>
     <p class="note">Forced SNR is the transit measured at its known ephemeris on the search's own detrended flux. Below about 7, the transit is too weak in that flux for the search to find; "weak after detrend" means SPOC detected it in this sector, so the loss is the search's.</p>
     <div class="tx-wrap">
-      <table data-source="missed_planets" data-row-key="toi">
+      <table data-source="missed_planets" data-row-key="sector,toi">
         <thead>
           <tr>
+            <th data-field="sector">Sector</th>
             <th data-field="toi">TOI</th>
             <th data-field="disposition">Disposition</th>
             <th class="n" data-field="period_days">Period (days)</th>
@@ -243,25 +278,24 @@
       <dt>TCE</dt><dd>Threshold Crossing Event: a periodic dip SPOC's search found in one sector. A detection, not a planet; many are eclipsing binaries or systematics.</dd>
       <dt>TOI</dt><dd>TESS Object of Interest: a detection human vetters promoted to a candidate, often using several sectors. Dispositions: CP confirmed planet, KP known planet, PC planet candidate, EB eclipsing binary, V variable star, IS instrumental.</dd>
       <dt>Found again</dt><dd>The search reports a signal at the same period (or a simple multiple or fraction of it) whose transits fall at the same times.</dd>
-      <dt>Too weak in sector 1</dt><dd>Fewer than two transits, or the transit measured at its known ephemeris on the search's flux is below the detection threshold. Such a TOI was found with more data than one sector.</dd>
-      <dt>Samples</dt><dd>TOI sample: every TOI listing sector 1 on a star with a 2-minute light curve. Development and hold-out: 60 stars with TCEs each, spread across SPOC's signal strength, plus 40 random stars with none; the hold-out shares no star with the development sample.</dd>
+      <dt>Too weak in one sector</dt><dd>Fewer than two transits in the sector, or the transit measured at its known ephemeris on the search's flux is below the detection threshold. Such a TOI was found with more data than one sector.</dd>
+      <dt>Samples</dt><dd>TOI sample: every TOI listing the sector, on a star with a 2-minute light curve there. TCE samples: 60 stars with TCEs, spread across SPOC's signal strength, plus 40 random stars with none. Sector 1 has two (development and a hold-out sharing no star with it); sector 2 has one, run after all tuning was done on sector 1.</dd>
     </dl>
   </section>
 </div>
 
-
 <div class="tx" style="margin-top: var(--cds-gap-lg)">
-  <p class="tx-foot">Produced by the fwh_tess search (a Python pilot, not an FFL workflow) from TESS 2-minute light curves read from MAST's public archive, compared with SPOC's sector 1 TCE table and the TOI catalogue. Data snapshot: /*__BUILT__*/.</p>
+  <p class="tx-foot">Produced by the fwh_tess search (a Python pilot, not an FFL workflow) from TESS 2-minute light curves read from MAST's public archive, compared with SPOC's single-sector TCE tables and the TOI catalogue. Data snapshot: /*__BUILT__*/.</p>
 </div>
 <script>
 (() => {
-  window.txState = window.txState || { pd: 'planets', sky: 'tois' };
+  window.txState = window.txState || { pd: 'planets', sky: 'tois', sector: '1' };
   const S = window.txState;
 
   const groupColor = (g) => ({
     'Recovered': dash.colors[0],
     'Missed': 'var(--cds-chart-status-critical)',
-    'Too weak in sector 1': 'var(--cds-chart-muted)',
+    'Too weak in one sector': 'var(--cds-chart-muted)',
     'Period outside search': dash.colors[2],
     'Single transit': dash.colors[4],
   }[g] || 'var(--cds-chart-muted)');
@@ -286,69 +320,82 @@
   const sync = () => {
     document.querySelectorAll('[data-pd]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.pd === S.pd)));
     document.querySelectorAll('[data-sky]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.sky === S.sky)));
+    document.querySelectorAll('[data-sector]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.sector === S.sector)));
     document.querySelectorAll('[data-legend]').forEach((l) => { l.hidden = l.dataset.legend !== S.sky; });
     document.querySelectorAll('.tx-sw[data-group]').forEach((s) => { s.style.background = groupColor(s.dataset.group); });
     document.querySelectorAll('.tx-sw[data-status]').forEach((s) => { s.style.background = statusColor(s.dataset.status); });
   };
   document.querySelectorAll('[data-pd]').forEach((b) => b.addEventListener('click', () => { S.pd = b.dataset.pd; sync(); dash.draw('pd'); }));
   document.querySelectorAll('[data-sky]').forEach((b) => b.addEventListener('click', () => { S.sky = b.dataset.sky; sync(); dash.draw('sky'); }));
+  document.querySelectorAll('[data-sector]').forEach((b) => b.addEventListener('click', () => { S.sector = b.dataset.sector; sync(); dash.draw('pd'); dash.draw('sky'); }));
   dash.onData(sync);
 
   dash.calc('headline', {
-    inputs: ['tois'],
-    title: 'Planets found again',
-    description: 'Planets and candidates (CP, KP, PC) that SPOC detected in sector 1, and how many the search recovered; the same for confirmed and known planets only.',
-    fn: (tois) => {
-      const planets = tois.filter((r) => r.planet_like === 'yes' && r.sector1_tce === 'yes');
+    inputs: ['tois', 'tce_sample'],
+    title: 'Planets found again, all sectors',
+    description: 'Planets and candidates (CP, KP, PC) SPOC detected in the same sector, and how many the search recovered; confirmed and known planets alone; and the share of all TCEs in the samples recovered.',
+    fn: (tois, tce_sample) => {
+      const planets = tois.filter((r) => r.planet_like === 'yes' && r.sector_tce === 'yes');
       const confirmed = planets.filter((r) => r.disposition === 'CP' || r.disposition === 'KP');
       const found = (rs) => rs.filter((r) => r.group === 'Recovered').length;
-      return [{ recovered: found(planets), total: planets.length, cpkp_recovered: found(confirmed), cpkp_total: confirmed.length }];
+      const tces = tce_sample.filter((r) => r.kind === 'TCE' && r.status !== 'Outside search');
+      const tfound = tces.filter((r) => r.status === 'Recovered').length;
+      return [{
+        recovered: found(planets), total: planets.length,
+        cpkp_recovered: found(confirmed), cpkp_total: confirmed.length,
+        percent: Math.round((100 * tfound) / tces.length),
+      }];
     },
   });
 
-  dash.calc('tce_rate', {
-    inputs: ['tce_sample'],
-    title: 'SPOC detections found again',
-    description: 'TCEs in the development and hold-out samples whose period is inside the search range, how many were recovered, and stars with no TCE that got a signal.',
-    fn: (tce_sample) => {
-      const tces = tce_sample.filter((r) => r.kind === 'TCE' && r.status !== 'Outside search');
-      const found = tces.filter((r) => r.status === 'Recovered').length;
-      const quiet = tce_sample.filter((r) => r.kind === 'No-TCE star');
-      const star = (r) => r.sample + ':' + r.tic_id;
-      return [{
-        recovered: found,
-        in_range: tces.length,
-        percent: Math.round((100 * found) / tces.length),
-        quiet_with_signal: new Set(quiet.filter((r) => r.status === 'Signal on a no-TCE star').map(star)).size,
-        quiet_stars: new Set(quiet.map(star)).size,
-      }];
+  dash.calc('by_sector', {
+    inputs: ['tois', 'tce_sample'],
+    title: 'Results by sector',
+    description: 'For each sector: planets found again, confirmed planets, candidates with no sector TCE that are strong enough to find, TCE-sample recovery and no-TCE stars with a signal.',
+    fn: (tois, tce_sample) => {
+      const sectors = [...new Set([...tois, ...tce_sample].map((r) => r.sector))].sort();
+      const found = (rs) => rs.filter((r) => r.group === 'Recovered').length;
+      return sectors.map((sector) => {
+        const t = tois.filter((r) => r.sector === sector && r.planet_like === 'yes');
+        const backed = t.filter((r) => r.sector_tce === 'yes');
+        const confirmed = backed.filter((r) => r.disposition === 'CP' || r.disposition === 'KP');
+        const inData = t.filter((r) => r.sector_tce === 'no' && (r.group === 'Recovered' || r.group === 'Missed'));
+        const smp = tce_sample.filter((r) => r.sector === sector);
+        const tces = smp.filter((r) => r.kind === 'TCE' && r.status !== 'Outside search');
+        const quiet = smp.filter((r) => r.kind === 'No-TCE star');
+        const star = (r) => r.sample + ':' + r.tic_id;
+        return {
+          sector,
+          planets_found: found(backed), planets_total: backed.length,
+          confirmed_found: found(confirmed), confirmed_total: confirmed.length,
+          notce_found: found(inData), notce_in_data: inData.length,
+          tces_found: tces.filter((r) => r.status === 'Recovered').length, tces_in_range: tces.length,
+          quiet_signal: new Set(quiet.filter((r) => r.status === 'Signal on a no-TCE star').map(star)).size,
+          quiet_stars: new Set(quiet.map(star)).size,
+        };
+      });
     },
   });
 
   dash.calc('missed_planets', {
     inputs: ['tois'],
     title: 'Planets still missed',
-    description: 'Planets and candidates SPOC detected in sector 1 that the search did not recover.',
+    description: 'Planets and candidates SPOC detected in the same sector that the search did not recover.',
     fn: (tois) => tois
-      .filter((r) => r.planet_like === 'yes' && r.sector1_tce === 'yes' && r.group !== 'Recovered')
-      .map((r) => ({ toi: r.toi, disposition: r.disposition, period_days: r.period_days, depth_ppm: r.depth_ppm, forced_snr: r.forced_snr, outcome: r.outcome })),
+      .filter((r) => r.planet_like === 'yes' && r.sector_tce === 'yes' && r.group !== 'Recovered')
+      .map((r) => ({ sector: r.sector, toi: r.toi, disposition: r.disposition, period_days: r.period_days, depth_ppm: r.depth_ppm, forced_snr: r.forced_snr, outcome: r.outcome })),
   });
 
-  const number = (name, id, field) => dash.draw(name, (el) => {
-    const d = dash.data(id);
-    el.textContent = d.status === 'ok' && d.data.length ? String(d.data[0][field]) : '—';
+  dash.draw('hl', (el) => {
+    const d = dash.data('headline');
+    el.textContent = d.status === 'ok' && d.data.length ? String(d.data[0][el.dataset.field]) : '—';
   });
-  number('h-rec', 'headline', 'recovered');
-  number('h-tot', 'headline', 'total');
-  number('h-rec2', 'headline', 'recovered');
-  number('h-tot2', 'headline', 'total');
-  number('c-rec', 'headline', 'cpkp_recovered');
-  number('c-tot', 'headline', 'cpkp_total');
-  number('t-pct', 'tce_rate', 'percent');
-  number('t-rec', 'tce_rate', 'recovered');
-  number('t-tot', 'tce_rate', 'in_range');
-  number('q-sig', 'tce_rate', 'quiet_with_signal');
-  number('q-tot', 'tce_rate', 'quiet_stars');
+  dash.draw('bs', (el) => {
+    const d = dash.data('by_sector');
+    const sector = (el.dataset.where || '').split('=')[1];
+    const row = d.status === 'ok' ? d.data.find((r) => r.sector === sector) : null;
+    el.textContent = row ? String(row[el.dataset.field]) : '—';
+  });
 
   const body = (name, id, cols, numeric, sortKey, rowClass) => dash.draw(name, (tb) => {
     const d = dash.data(id);
@@ -373,9 +420,9 @@
     (a, b) => Number(a.order) - Number(b.order),
     (r) => (r.default === 'yes' ? 'is-default' : ''));
   body('missed-body', 'missed_planets',
-    ['toi', 'disposition', 'period_days', 'depth_ppm', 'forced_snr', 'outcome'],
+    ['sector', 'toi', 'disposition', 'period_days', 'depth_ppm', 'forced_snr', 'outcome'],
     ['period_days', 'depth_ppm', 'forced_snr'],
-    (a, b) => Number(a.forced_snr) - Number(b.forced_snr));
+    (a, b) => Number(a.sector) - Number(b.sector) || Number(a.forced_snr) - Number(b.forced_snr));
 })();
 </script>
 
@@ -433,9 +480,10 @@
     const C = window.txConst;
     const usable = d.data.filter((r) => r.period_days !== '' && Number(r.depth_ppm) > 0);
     const pts = usable
+      .filter((r) => r.sector === window.txState.sector)
       .filter((r) => window.txState.pd === 'all' || r.planet_like === 'yes')
       .map((r) => ({ r, P: Number(r.period_days), D: Number(r.depth_ppm) }));
-    const order = { 'Too weak in sector 1': 0, 'Period outside search': 1, 'Single transit': 1, 'Recovered': 2, 'Missed': 3 };
+    const order = { 'Too weak in one sector': 0, 'Period outside search': 1, 'Single transit': 1, 'Recovered': 2, 'Missed': 3 };
     pts.sort((a, b) => (order[a.r.group] ?? 0) - (order[b.r.group] ?? 0));
 
     const W = el.clientWidth || 600;
@@ -493,7 +541,7 @@
         `TOI ${r.toi} · ${window.txDisposition[r.disposition] || r.disposition}`,
         `Period ${r.period_days} d · depth ${fmtN(Number(r.depth_ppm))} ppm`,
         `Duration ${r.duration_hours} h${r.forced_snr !== '' ? ` · forced SNR ${r.forced_snr}` : ''}`,
-        `${r.group}${r.sector1_tce === 'yes' ? ' · SPOC detected it in sector 1' : ''}`,
+        `${r.group}${r.sector_tce === 'yes' ? ' · SPOC detected it in this sector' : ''}`,
       ], p.x / scale, p.y / scale);
     });
     svg.on('pointerleave', () => { ring.attr('visibility', 'hidden'); show(null); });
@@ -509,7 +557,10 @@
     if (cur.status !== 'ok') return;
 
     const rad = Math.PI / 180;
-    const all = [...(a.status === 'ok' ? a.data : []), ...(b.status === 'ok' ? b.data : [])];
+    const sec = window.txState.sector;
+    const aRows = a.status === 'ok' ? a.data.filter((r) => r.sector === sec) : [];
+    const bRows = b.status === 'ok' ? b.data.filter((r) => r.sector === sec) : [];
+    const all = [...aRows, ...bRows];
     // Field centre: the mean direction of every searched star.
     let vx = 0, vy = 0, vz = 0;
     all.forEach((r) => {
@@ -589,8 +640,8 @@
 
     let pts;
     if (window.txState.sky === 'tois') {
-      const order = { 'Too weak in sector 1': 0, 'Period outside search': 1, 'Single transit': 1, 'Recovered': 2, 'Missed': 3 };
-      pts = a.data.slice().sort((p, q) => (order[p.group] ?? 0) - (order[q.group] ?? 0)).map((r) => ({
+      const order = { 'Too weak in one sector': 0, 'Period outside search': 1, 'Single transit': 1, 'Recovered': 2, 'Missed': 3 };
+      pts = aRows.slice().sort((p, q) => (order[p.group] ?? 0) - (order[q.group] ?? 0)).map((r) => ({
         r, c: window.txGroupColor(r.group), hollow: r.planet_like !== 'yes', size: 3.6,
         lines: [
           `TOI ${r.toi} · ${window.txDisposition[r.disposition] || r.disposition}`,
@@ -601,7 +652,7 @@
       }));
     } else {
       const order = { 'No signal': 0, 'Outside search': 1, 'Signal on a no-TCE star': 2, 'Recovered': 2, 'Missed': 3 };
-      pts = b.data.slice().sort((p, q) => (order[p.status] ?? 0) - (order[q.status] ?? 0)).map((r) => ({
+      pts = bRows.slice().sort((p, q) => (order[p.status] ?? 0) - (order[q.status] ?? 0)).map((r) => ({
         r, c: window.txStatusColor(r.status), hollow: false, size: r.status === 'No signal' ? 2.6 : 3.6,
         lines: r.kind === 'TCE'
           ? [`TCE ${r.tce_id} · ${r.sample} sample`, `Period ${r.period_days} d · depth ${fmtN(Number(r.depth_ppm))} ppm · SPOC SNR ${r.spoc_snr}`, `${r.status}${r.toi_disposition ? ` · became a TOI (${r.toi_disposition})` : ''}`]
