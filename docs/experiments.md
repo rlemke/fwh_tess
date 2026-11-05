@@ -299,3 +299,45 @@ faster than ~1 day needs either a variability model (a periodogram-driven
 sinusoid fit, or a GP) or a knot floor tied to the trial duration, which
 pilots 6b/6c and 7b showed costs long transits. Counts are from an automatic
 classification and need a per-star look before quoting.
+
+## Pre-whitening fast stellar variability, sectors 1–13 (2026-11-05)
+
+`--prewhiten` (off by default): before the spline, divide out up to three
+Lomb-Scargle periodicities faster than 1.5 d, each only if significant (FAP <
+1e-4) and two-sided in the folded data (brightest-bin rise ≥ 0.3 × faintest-bin
+dip), so transits and eclipses, which only dim the star, are left in. Same
+stars as the default runs.
+
+| Sectors 1–13 | Default (spline) | Pre-whitened |
+|---|---|---|
+| Planet-like TOIs SPOC detected, found | **676 / 707 (95.6%, 93.8–96.9)** | 657 / 707 (92.9%, 90.8–94.6) |
+| Confirmed + known | 369 / 383 | 368 / 383 |
+| No-TCE stars with a signal | 92 / 520 (17.7%) | **44 / 520 (8.5%)** |
+| TCE sample | 630 / 1,100 | 487 / 1,093 |
+| EB / V / IS TOIs found | 281 | 244 |
+| Signals on TOI stars matching no TOI | 491 | 348 |
+
+**Rejected as a default.** It did what it was built for: 10 planets gained, all
+on fast variables (1066.01, 837.01, 540.01 twice, 4325.01, 4180.01, 140.01,
+179.01, 4364.01, 175.03). But it lost 29, including pi Men c (144.01, sector 8)
+and TOI 407.01 in five sectors, for a net −19.
+
+Why, from the losses:
+
+- **It fires on stars that barely vary.** On TOI 396's bright, quiet star it
+  removed 40–50 ppm terms that only just pass the false-alarm test, which was
+  enough to push 180–233 ppm planets under threshold.
+- **The two-sidedness test does not separate.** A real win (1066.01's 0.63 d
+  variable) scored 0.43; a loss (4181.01, a 24,380 ppm dip every 0.6 d,
+  probably an EB) scored 0.48. No threshold keeps one and drops the other.
+- **The fit absorbs part of the transit** on variable stars (407.01: forced
+  SNR 14 → 5.8): clipping individual low points does not protect a transit
+  whose depth is comparable to the per-point scatter.
+- **It removes what SPOC also reports**: contact binaries and short-period
+  variables are TCEs and EB/V TOIs, so agreement drops (630 → 487 TCEs).
+
+What it does well, it does very well: no-TCE stars with a signal halve (92 →
+44), and stray signals on TOI stars fall 29%. A variant worth testing gates
+it on amplitude relative to the noise (so quiet stars are left alone) and
+masks the strongest BLS events before fitting; or use it as a second pass only
+on stars where the default leaves a sub-day variability peak.
