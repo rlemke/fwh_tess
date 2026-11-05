@@ -650,3 +650,30 @@ def test_prewhiten_needs_the_spline():
         sr.SearchConfig(
             detrend_method="median", prewhiten_max_period_days=1.5
         ).validate()
+
+
+def test_prewhiten_gate_leaves_a_barely_varying_star_alone():
+    """TOI 396's case: tiny coherent wiggles on a quiet star are not modelled."""
+    t, f = _sector(planets=[(5.97, 1326.4, 3.0, 250.0)], noise_ppm=300.0)
+    f = f + 50e-6 * np.sin(2 * np.pi * t / 0.66)
+    assert sr.prewhiten(t, f, PW)[1] == []
+    ungated = sr.SearchConfig(
+        prewhiten_max_period_days=1.5, prewhiten_min_red_excess=0.0
+    )
+    assert sr.prewhiten(t, f, ungated)[1]  # without the gate it would have fired
+
+
+def test_prewhiten_dip_mask_protects_a_transit_inside_variability():
+    from tesstransit import pilot
+
+    t, f = _sector(planets=[(2.165, 1326.0, 3.4, 5000.0)], noise_ppm=1500.0, seed=4)
+    f = (
+        f
+        + 0.0015 * np.sin(2 * np.pi * t / 0.54)
+        + 0.0015 * np.sin(2 * np.pi * t / 0.724)
+    )
+    eph = [("p", 2.165, 1326.0, 3.4)]
+    masked = pilot.forced_stats(t, f, eph, PW)["p"]["snr_red"]
+    bare = sr.SearchConfig(prewhiten_max_period_days=1.5, prewhiten_mask_dips=False)
+    unmasked = pilot.forced_stats(t, f, eph, bare)["p"]["snr_red"]
+    assert masked >= unmasked and masked > 15

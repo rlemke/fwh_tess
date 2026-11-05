@@ -68,6 +68,16 @@ class SearchConfig:
     prewhiten_harmonics: int = 3
     prewhiten_fap: float = 1e-4
     prewhiten_min_symmetry: float = 0.3
+    # Gate and transit protection (added after the first 13-sector run lost
+    # 29 planets for 10 gained): only pre-whiten while the spline residual,
+    # averaged over an hour, scatters at least prewhiten_min_red_excess times
+    # what white noise would (0 = no gate) -- on TOI 396's quiet star 40-50 ppm
+    # terms were removed and two shallow planets went under threshold. And
+    # with prewhiten_mask_dips, stretches dipping below 3 sigma in 1-hour
+    # averages are left out of the fit, so it cannot absorb a transit
+    # (TOI 407.01: forced SNR 14 -> 5.8 without it).
+    prewhiten_min_red_excess: float = 2.0
+    prewhiten_mask_dips: bool = True
     detrend_per_duration: bool = False
     detrend_window_days: float = 1.0
     detrend_window_factor: float = 3.0
@@ -329,8 +339,16 @@ def prewhiten(
 
     f = flux.copy()
     removed: list[Prewhitened] = []
+    cadence = float(np.median(np.diff(time)))
+    hour = 1.0 / 24.0
+    sigma_w = 1.4826 * np.median(np.abs(np.diff(flux))) / np.sqrt(2.0) / np.median(flux)
+    white_hour = sigma_w / np.sqrt(max(1.0, hour / cadence))
     for _ in range(cfg.prewhiten_max_terms):
         r = f / spline_trend(time, f, cfg.spline_knot_days)[0] - 1.0
+        if cfg.prewhiten_min_red_excess > 0:
+            excess = binned_scatter(time, r, hour) / white_hour
+            if excess < cfg.prewhiten_min_red_excess:
+                break  # what is left is close to white noise: nothing to model
         ls = LombScargle(time, r)
         freq, power = ls.autopower(
             minimum_frequency=1.0 / cfg.prewhiten_max_period_days,
@@ -375,6 +393,20 @@ def prewhiten(
         sig = 1.4826 * np.median(np.abs(r - np.median(r)))
         keep = r > np.median(r) - 3 * sig
         model = _harmonic_fit(time, r, keep, float(freq[i]), cfg.prewhiten_harmonics)
+        if cfg.prewhiten_mask_dips:
+            # A transit is a STRETCH of low points, each within the noise when
+            # the star is noisy: find dips in 1-hour running means of what the
+            # first fit leaves, and refit without them (twice).
+            half = max(1, round(0.5 * hour / cadence))
+            kernel = np.ones(2 * half + 1) / (2 * half + 1)
+            for _ in range(2):
+                smooth = np.convolve(r - model, kernel, mode="same")
+                s_sig = 1.4826 * np.median(np.abs(smooth - np.median(smooth)))
+                dip = smooth < np.median(smooth) - 3 * s_sig
+                dip = np.convolve(dip, np.ones(2 * half + 1), mode="same") > 0  # widen
+                model = _harmonic_fit(
+                    time, r, keep & ~dip, float(freq[i]), cfg.prewhiten_harmonics
+                )
         f = f / (1.0 + model)
         removed.append(
             Prewhitened(1.0 / float(freq[i]), 0.5 * (up + down) * 1e6, symmetry)
