@@ -20,3 +20,6 @@ dev = ["pytest>=7.0", "ruff>=0.8.0", "wotan>=1.10"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+tesstransit = ["site_template.html"]

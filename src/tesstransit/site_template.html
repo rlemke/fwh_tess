@@ -1,0 +1,635 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TESS sector 1 re-search</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,400&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+  /* Stand-alone copy of the results dashboard: the tokens and the small
+     data runtime the dashboard provides are defined here instead. */
+  :root {
+    --font-anthropic-sans: "Source Sans 3", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-anthropic-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+    --color-bg: #f6f7f9; --color-panel: #ffffff; --color-fg: #1c2230; --color-fg-muted: #5d6676;
+    --color-border-line: #dde1e8; --color-bad: #c8382e;
+    --cds-chart-muted: #b3bac6; --cds-chart-status-critical: #d1453b; --cds-chart-grid: #e6e9ef;
+    --cds-chart-axis: #9aa3b2; --cds-chart-reference: #4a6fa5; --cds-surface-popover: #ffffff;
+    --cds-border: #d3d8e0; --cds-shadow-popover: 0 4px 16px rgba(20, 30, 50, .12); --cds-text-secondary: #5d6676;
+    --tx-s0: #2563c9; --tx-s1: #7a5af5; --tx-s2: #c98500; --tx-s3: #9a46c9; --tx-s4: #12917f;
+    --tx-s5: #d0587e; --tx-s6: #5a8f29; --tx-s7: #6b7280;
+    --cds-font-size-caption: 0.8125rem; --cds-font-size-body: 1rem; --cds-font-size-heading: 1.0625rem;
+    --cds-font-size-title: 2rem; --cds-font-weight-medium: 600;
+    --cds-gap-xs: 0.25rem; --cds-gap-sm: 0.5rem; --cds-gap-md: 1rem; --cds-gap-lg: 1.5rem;
+    --cds-pad-xs: 0.25rem; --cds-pad-sm: 0.5rem; --cds-pad-lg: 1.25rem; --cds-radius: 8px; --cds-dur-slow: 300ms;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-bg: #10141c; --color-panel: #171d28; --color-fg: #e6e9ef; --color-fg-muted: #9aa3b2;
+      --color-border-line: #2a3241; --color-bad: #f06a5f;
+      --cds-chart-muted: #4f5a6b; --cds-chart-status-critical: #f0675c; --cds-chart-grid: #232b38;
+      --cds-chart-axis: #5d6878; --cds-chart-reference: #8fb0e0; --cds-surface-popover: #1e2532;
+      --cds-border: #323c4d; --cds-shadow-popover: 0 4px 16px rgba(0, 0, 0, .45); --cds-text-secondary: #9aa3b2;
+      --tx-s0: #6ea0ff; --tx-s1: #a48bff; --tx-s2: #e9a83a; --tx-s3: #c584ef; --tx-s4: #3cc3ad;
+      --tx-s5: #f08aa9; --tx-s6: #8cc45a; --tx-s7: #9aa3b2;
+      color-scheme: dark;
+    }
+  }
+  body { margin: 0; background: var(--color-bg); color: var(--color-fg); font-family: var(--font-anthropic-sans); }
+  #dash-root { padding-block: 2rem 3rem; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .tx-foot { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); max-width: 78ch; }
+  .tx-foot a { color: inherit; }
+</style>
+<script>
+  window.__TX_DATA__ = /*__DATA__*/null;
+  // The subset of the dashboard runtime the page uses, over embedded data.
+  window.dash = (() => {
+    const DATA = window.__TX_DATA__;
+    const calcs = {};
+    const draws = {};
+    const rows = (id) => (id in calcs ? calcs[id] : DATA[id]);
+    const api = {
+      colors: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => `var(--tx-s${i})`),
+      data: (id) => {
+        const d = rows(id);
+        return d ? { status: 'ok', data: d, columns: Object.keys(d[0] || {}), meta: [] } : { status: 'missing', data: [] };
+      },
+      calc: (id, spec) => { calcs[id] = spec.fn(...spec.inputs.map(rows)); },
+      draw: (name, fn) => {
+        if (typeof fn === 'function') draws[name] = fn;
+        const f = draws[name];
+        if (f) document.querySelectorAll(`[data-draw="${name}"]`).forEach((el) => f(el));
+      },
+      onData: (fn) => { fn(); },
+    };
+    let t;
+    window.addEventListener('resize', () => {
+      clearTimeout(t);
+      t = setTimeout(() => Object.keys(draws).forEach((n) => api.draw(n)), 150);
+    });
+    return api;
+  })();
+</script>
+</head>
+<body>
+<div id="dash-root">
+<style>
+  .tx { font-family: var(--font-anthropic-sans); display: flex; flex-direction: column; gap: var(--cds-gap-lg); max-width: 1240px; margin-inline: auto; }
+  .tx b { font-weight: 600; }
+  .tx [hidden] { display: none !important; }
+  .tx-head h1 { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); margin: 0; text-wrap: balance; }
+  .tx-head p { margin: var(--cds-gap-xs) 0 0; color: var(--color-fg-muted); max-width: 72ch; font-size: var(--cds-font-size-body); }
+  .tx-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); gap: var(--cds-gap-md); }
+  .tx-tile, .tx-card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); min-width: 0; }
+  .tx-tile { display: flex; flex-direction: column; justify-content: space-between; gap: var(--cds-gap-sm); }
+  .tx-tile .lbl { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .tx-tile .num { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); font-variant-numeric: tabular-nums; }
+  .tx-tile .of { font-family: var(--font-anthropic-sans); font-size: var(--cds-font-size-body); color: var(--color-fg-muted); }
+  .tx-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 30rem), 1fr)); gap: var(--cds-gap-md); }
+  .tx-card { display: flex; flex-direction: column; gap: var(--cds-gap-sm); }
+  .tx-card h2 { font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); margin: 0; text-wrap: balance; }
+  .tx-card .note { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); margin: 0; max-width: 78ch; }
+  .tx-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--cds-gap-sm); }
+  .tx-toggle { display: flex; gap: var(--cds-gap-xs); flex-wrap: wrap; }
+  .tx-toggle button { font: inherit; font-size: var(--cds-font-size-caption); padding: var(--cds-pad-xs) var(--cds-pad-sm); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); background: transparent; color: var(--color-fg); cursor: pointer; }
+  .tx-toggle button[aria-pressed="true"] { background: var(--color-fg); color: var(--color-bg); border-color: var(--color-fg); }
+  .tx-toggle button:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+  .tx-legend { display: flex; flex-wrap: wrap; gap: var(--cds-gap-xs) var(--cds-gap-md); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); list-style: none; margin: 0; padding: 0; }
+  .tx-legend li { display: flex; align-items: center; gap: var(--cds-gap-xs); }
+  .tx-sw { width: 0.625rem; height: 0.625rem; border-radius: 50%; display: inline-block; background: var(--cds-chart-muted); }
+  .tx-sw.hollow { background: transparent; border: 1.5px solid var(--color-fg-muted); box-sizing: border-box; }
+  .tx-chart { position: relative; min-height: 340px; }
+  .tx-sky { position: relative; min-height: 360px; }
+  .tx-tip { position: absolute; pointer-events: none; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); border-radius: var(--cds-radius); box-shadow: var(--cds-shadow-popover); padding: var(--cds-pad-xs) var(--cds-pad-sm); font-size: var(--cds-font-size-caption); max-width: 17rem; z-index: 2; line-height: 1.45; }
+  .tx-tip .t { color: var(--cds-text-secondary); }
+  .tx-fail { display: flex; align-items: center; justify-content: center; gap: var(--cds-gap-xs); min-height: inherit; height: 100%; color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+  .tx-fail::before { content: ""; width: 0.375rem; height: 0.375rem; border-radius: 50%; background: var(--color-bad); }
+  .tx-wrap { max-height: 26rem; overflow: auto; }
+  .tx table { border-collapse: collapse; width: 100%; font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; }
+  .tx th, .tx td { text-align: left; padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); vertical-align: top; }
+  .tx th { position: sticky; top: 0; background: var(--color-panel); color: var(--color-fg-muted); font-weight: var(--cds-font-weight-medium); }
+  .tx .n { text-align: right; }
+  .tx tr.is-default td { font-weight: 600; }
+  .tx dl { display: grid; grid-template-columns: minmax(7rem, max-content) 1fr; gap: var(--cds-gap-xs) var(--cds-gap-md); margin: 0; font-size: var(--cds-font-size-caption); }
+  .tx dt { font-weight: var(--cds-font-weight-medium); }
+  .tx dd { margin: 0; color: var(--color-fg-muted); max-width: 78ch; }
+  .tx svg text { fill: var(--color-fg-muted); font-size: var(--cds-font-size-caption); font-family: var(--font-anthropic-sans); }
+  [data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
+  [data-dash-source-state=empty] { color: transparent; }
+</style>
+
+<div class="tx">
+  <header class="tx-head">
+    <h1 id="title">TESS sector 1 re-search</h1>
+    <p>An independent box-least-squares search of TESS 2-minute light curves, compared with NASA's SPOC pipeline. Of the planets and planet candidates SPOC detected in sector 1, it finds <b data-draw="h-rec" data-source="headline" data-field="recovered">—</b> of <b data-draw="h-tot" data-source="headline" data-field="total">—</b>. Of all SPOC detections it finds only <b><span data-draw="t-pct" data-source="tce_rate" data-field="percent">—</span>%</b>, because most of what it misses never became a planet candidate.</p>
+  </header>
+
+  <section class="tx-tiles" aria-label="Headline figures">
+    <div class="tx-tile">
+      <span class="lbl">Planets and candidates SPOC detected in sector 1, found again</span>
+      <span class="num"><span data-draw="h-rec2" data-source="headline" data-field="recovered">—</span> <span class="of">of <span data-draw="h-tot2" data-source="headline" data-field="total">—</span></span></span>
+    </div>
+    <div class="tx-tile">
+      <span class="lbl">Confirmed or known planets among them, found again</span>
+      <span class="num"><span data-draw="c-rec" data-source="headline" data-field="cpkp_recovered">—</span> <span class="of">of <span data-draw="c-tot" data-source="headline" data-field="cpkp_total">—</span></span></span>
+    </div>
+    <div class="tx-tile">
+      <span class="lbl">All SPOC detections in the search's period range, found again (development and hold-out samples)</span>
+      <span class="num"><span data-draw="t-rec" data-source="tce_rate" data-field="recovered">—</span> <span class="of">of <span data-draw="t-tot" data-source="tce_rate" data-field="in_range">—</span></span></span>
+    </div>
+    <div class="tx-tile">
+      <span class="lbl">Stars with no SPOC detection where the search reports a signal</span>
+      <span class="num"><span data-draw="q-sig" data-source="tce_rate" data-field="quiet_with_signal">—</span> <span class="of">of <span data-draw="q-tot" data-source="tce_rate" data-field="quiet_stars">—</span></span></span>
+    </div>
+  </section>
+
+  <section class="tx-grid">
+    <div class="tx-card" id="period-depth">
+      <h2>Period and depth of every sector 1 TOI</h2>
+      <p class="note">Each point is one TESS Object of Interest on a star with a 2-minute light curve. The shaded band is the period range the search covers: two transits must fit in one ~27-day sector. Filled points are planets or candidates; hollow points are eclipsing binaries and other false positives.</p>
+      <div class="tx-bar">
+        <div class="tx-toggle" role="group" aria-label="Which TOIs">
+          <button type="button" data-pd="planets" aria-pressed="true">Planets and candidates</button>
+          <button type="button" data-pd="all" aria-pressed="false">All TOIs</button>
+        </div>
+        <ul class="tx-legend">
+          <li><span class="tx-sw" data-group="Recovered"></span>Found again</li>
+          <li><span class="tx-sw" data-group="Missed"></span>Missed</li>
+          <li><span class="tx-sw" data-group="Too weak in sector 1"></span>Too weak in sector 1</li>
+          <li><span class="tx-sw" data-group="Period outside search"></span>Period outside search</li>
+          <li><span class="tx-sw" data-group="Single transit"></span>Single transit</li>
+        </ul>
+      </div>
+      <div class="tx-chart dash-skeleton" data-draw="pd" data-source="tois"></div>
+    </div>
+
+    <div class="tx-card" id="sky-map">
+      <h2>Where the stars are</h2>
+      <p class="note">Every searched star, on the sky around sector 1's field (orthographic, north up, right ascension increasing to the left as seen from Earth). Dashed lines mark declination every 10° and right ascension every 2 hours.</p>
+      <div class="tx-bar">
+        <div class="tx-toggle" role="group" aria-label="Which sample">
+          <button type="button" data-sky="tois" aria-pressed="true">TOI sample</button>
+          <button type="button" data-sky="tces" aria-pressed="false">TCE samples</button>
+        </div>
+        <ul class="tx-legend" data-legend="tois">
+          <li><span class="tx-sw" data-group="Recovered"></span>Found again</li>
+          <li><span class="tx-sw" data-group="Missed"></span>Missed</li>
+          <li><span class="tx-sw" data-group="Too weak in sector 1"></span>Too weak</li>
+          <li><span class="tx-sw" data-group="Period outside search"></span>Period outside search</li>
+          <li><span class="tx-sw" data-group="Single transit"></span>Single transit</li>
+        </ul>
+        <ul class="tx-legend" data-legend="tces" hidden>
+          <li><span class="tx-sw" data-status="Recovered"></span>TCE found again</li>
+          <li><span class="tx-sw" data-status="Missed"></span>TCE missed</li>
+          <li><span class="tx-sw" data-status="Outside search"></span>TCE period outside search</li>
+          <li><span class="tx-sw" data-status="Signal on a no-TCE star"></span>Signal on a star with no TCE</li>
+          <li><span class="tx-sw" data-status="No signal"></span>Star with no TCE, no signal</li>
+        </ul>
+      </div>
+      <div class="tx-sky dash-skeleton" data-draw="sky" data-source="tois tce_sample"></div>
+    </div>
+  </section>
+
+  <section class="tx-card" id="experiments">
+    <h2>Detrending experiments</h2>
+    <p class="note">Each version of the search scored on all three samples. Variant 7a, a cubic spline whose knot spacing is chosen for each star, is the current default: it finds more planets and roughly halves the signals on stars with no SPOC detection. TCE counts are those in the search's period range.</p>
+    <div class="tx-wrap">
+      <table data-source="variants" data-row-key="variant">
+        <thead>
+          <tr>
+            <th data-field="variant">Variant</th>
+            <th data-field="detrending">Detrending</th>
+            <th class="n" data-field="planets_recovered">Planets found</th>
+            <th class="n" data-field="planets_total">Planets SPOC detected</th>
+            <th class="n" data-field="dev_tces_recovered">Development TCEs found</th>
+            <th class="n" data-field="dev_tces_total">Development TCEs</th>
+            <th class="n" data-field="dev_quiet_with_signal">Development stars with no TCE but a signal</th>
+            <th class="n" data-field="holdout_tces_recovered">Hold-out TCEs found</th>
+            <th class="n" data-field="holdout_tces_total">Hold-out TCEs</th>
+            <th class="n" data-field="holdout_quiet_with_signal">Hold-out stars with no TCE but a signal</th>
+            <th class="n" data-field="seconds_per_star">Seconds per star</th>
+          </tr>
+        </thead>
+        <tbody data-draw="variants-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="tx-card" id="missed">
+    <h2>Planets SPOC found that the search still misses</h2>
+    <p class="note">Forced SNR is the transit measured at its known ephemeris on the search's own detrended flux. Below about 7, the transit is too weak in that flux for the search to find; "weak after detrend" means SPOC detected it in this sector, so the loss is the search's.</p>
+    <div class="tx-wrap">
+      <table data-source="missed_planets" data-row-key="toi">
+        <thead>
+          <tr>
+            <th data-field="toi">TOI</th>
+            <th data-field="disposition">Disposition</th>
+            <th class="n" data-field="period_days">Period (days)</th>
+            <th class="n" data-field="depth_ppm">Depth (ppm)</th>
+            <th class="n" data-field="forced_snr">Forced SNR</th>
+            <th data-field="outcome">Outcome</th>
+          </tr>
+        </thead>
+        <tbody data-draw="missed-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="tx-card" id="terms">
+    <h2>Terms</h2>
+    <dl>
+      <dt>TCE</dt><dd>Threshold Crossing Event: a periodic dip SPOC's search found in one sector. A detection, not a planet; many are eclipsing binaries or systematics.</dd>
+      <dt>TOI</dt><dd>TESS Object of Interest: a detection human vetters promoted to a candidate, often using several sectors. Dispositions: CP confirmed planet, KP known planet, PC planet candidate, EB eclipsing binary, V variable star, IS instrumental.</dd>
+      <dt>Found again</dt><dd>The search reports a signal at the same period (or a simple multiple or fraction of it) whose transits fall at the same times.</dd>
+      <dt>Too weak in sector 1</dt><dd>Fewer than two transits, or the transit measured at its known ephemeris on the search's flux is below the detection threshold. Such a TOI was found with more data than one sector.</dd>
+      <dt>Samples</dt><dd>TOI sample: every TOI listing sector 1 on a star with a 2-minute light curve. Development and hold-out: 60 stars with TCEs each, spread across SPOC's signal strength, plus 40 random stars with none; the hold-out shares no star with the development sample.</dd>
+    </dl>
+  </section>
+</div>
+
+
+<div class="tx" style="margin-top: var(--cds-gap-lg)">
+  <p class="tx-foot">Produced by the fwh_tess search (a Python pilot, not an FFL workflow) from TESS 2-minute light curves read from MAST's public archive, compared with SPOC's sector 1 TCE table and the TOI catalogue. Data snapshot: /*__BUILT__*/.</p>
+</div>
+<script>
+(() => {
+  window.txState = window.txState || { pd: 'planets', sky: 'tois' };
+  const S = window.txState;
+
+  const groupColor = (g) => ({
+    'Recovered': dash.colors[0],
+    'Missed': 'var(--cds-chart-status-critical)',
+    'Too weak in sector 1': 'var(--cds-chart-muted)',
+    'Period outside search': dash.colors[2],
+    'Single transit': dash.colors[4],
+  }[g] || 'var(--cds-chart-muted)');
+  const statusColor = (s) => ({
+    'Recovered': dash.colors[0],
+    'Missed': 'var(--cds-chart-status-critical)',
+    'Outside search': dash.colors[2],
+    'Signal on a no-TCE star': dash.colors[3],
+    'No signal': 'var(--cds-chart-muted)',
+  }[s] || 'var(--cds-chart-muted)');
+  const DISPOSITION = { CP: 'confirmed planet', KP: 'known planet', PC: 'planet candidate', EB: 'eclipsing binary', V: 'variable star', IS: 'instrumental', FP: 'false positive', FA: 'false alarm' };
+  // Search range from the search configuration (0.25-26 d): fixed references.
+  const SEARCH_MIN_P = 0.25, SEARCH_MAX_P = 26;
+  // South ecliptic pole, J2000: a fixed reference point on the sky map.
+  const SEP = { ra: 90, dec: -66.5607 };
+
+  window.txGroupColor = groupColor;
+  window.txStatusColor = statusColor;
+  window.txDisposition = DISPOSITION;
+  window.txConst = { SEARCH_MIN_P, SEARCH_MAX_P, SEP };
+
+  const sync = () => {
+    document.querySelectorAll('[data-pd]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.pd === S.pd)));
+    document.querySelectorAll('[data-sky]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.sky === S.sky)));
+    document.querySelectorAll('[data-legend]').forEach((l) => { l.hidden = l.dataset.legend !== S.sky; });
+    document.querySelectorAll('.tx-sw[data-group]').forEach((s) => { s.style.background = groupColor(s.dataset.group); });
+    document.querySelectorAll('.tx-sw[data-status]').forEach((s) => { s.style.background = statusColor(s.dataset.status); });
+  };
+  document.querySelectorAll('[data-pd]').forEach((b) => b.addEventListener('click', () => { S.pd = b.dataset.pd; sync(); dash.draw('pd'); }));
+  document.querySelectorAll('[data-sky]').forEach((b) => b.addEventListener('click', () => { S.sky = b.dataset.sky; sync(); dash.draw('sky'); }));
+  dash.onData(sync);
+
+  dash.calc('headline', {
+    inputs: ['tois'],
+    title: 'Planets found again',
+    description: 'Planets and candidates (CP, KP, PC) that SPOC detected in sector 1, and how many the search recovered; the same for confirmed and known planets only.',
+    fn: (tois) => {
+      const planets = tois.filter((r) => r.planet_like === 'yes' && r.sector1_tce === 'yes');
+      const confirmed = planets.filter((r) => r.disposition === 'CP' || r.disposition === 'KP');
+      const found = (rs) => rs.filter((r) => r.group === 'Recovered').length;
+      return [{ recovered: found(planets), total: planets.length, cpkp_recovered: found(confirmed), cpkp_total: confirmed.length }];
+    },
+  });
+
+  dash.calc('tce_rate', {
+    inputs: ['tce_sample'],
+    title: 'SPOC detections found again',
+    description: 'TCEs in the development and hold-out samples whose period is inside the search range, how many were recovered, and stars with no TCE that got a signal.',
+    fn: (tce_sample) => {
+      const tces = tce_sample.filter((r) => r.kind === 'TCE' && r.status !== 'Outside search');
+      const found = tces.filter((r) => r.status === 'Recovered').length;
+      const quiet = tce_sample.filter((r) => r.kind === 'No-TCE star');
+      const star = (r) => r.sample + ':' + r.tic_id;
+      return [{
+        recovered: found,
+        in_range: tces.length,
+        percent: Math.round((100 * found) / tces.length),
+        quiet_with_signal: new Set(quiet.filter((r) => r.status === 'Signal on a no-TCE star').map(star)).size,
+        quiet_stars: new Set(quiet.map(star)).size,
+      }];
+    },
+  });
+
+  dash.calc('missed_planets', {
+    inputs: ['tois'],
+    title: 'Planets still missed',
+    description: 'Planets and candidates SPOC detected in sector 1 that the search did not recover.',
+    fn: (tois) => tois
+      .filter((r) => r.planet_like === 'yes' && r.sector1_tce === 'yes' && r.group !== 'Recovered')
+      .map((r) => ({ toi: r.toi, disposition: r.disposition, period_days: r.period_days, depth_ppm: r.depth_ppm, forced_snr: r.forced_snr, outcome: r.outcome })),
+  });
+
+  const number = (name, id, field) => dash.draw(name, (el) => {
+    const d = dash.data(id);
+    el.textContent = d.status === 'ok' && d.data.length ? String(d.data[0][field]) : '—';
+  });
+  number('h-rec', 'headline', 'recovered');
+  number('h-tot', 'headline', 'total');
+  number('h-rec2', 'headline', 'recovered');
+  number('h-tot2', 'headline', 'total');
+  number('c-rec', 'headline', 'cpkp_recovered');
+  number('c-tot', 'headline', 'cpkp_total');
+  number('t-pct', 'tce_rate', 'percent');
+  number('t-rec', 'tce_rate', 'recovered');
+  number('t-tot', 'tce_rate', 'in_range');
+  number('q-sig', 'tce_rate', 'quiet_with_signal');
+  number('q-tot', 'tce_rate', 'quiet_stars');
+
+  const body = (name, id, cols, numeric, sortKey, rowClass) => dash.draw(name, (tb) => {
+    const d = dash.data(id);
+    tb.replaceChildren();
+    if (d.status !== 'ok') return;
+    const rows = sortKey ? d.data.slice().sort(sortKey) : d.data;
+    for (const r of rows) {
+      const tr = document.createElement('tr');
+      if (rowClass) tr.className = rowClass(r);
+      for (const c of cols) {
+        const td = document.createElement('td');
+        td.textContent = r[c];
+        if (numeric.includes(c)) td.className = 'n';
+        tr.append(td);
+      }
+      tb.append(tr);
+    }
+  });
+  body('variants-body', 'variants',
+    ['variant', 'detrending', 'planets_recovered', 'planets_total', 'dev_tces_recovered', 'dev_tces_total', 'dev_quiet_with_signal', 'holdout_tces_recovered', 'holdout_tces_total', 'holdout_quiet_with_signal', 'seconds_per_star'],
+    ['planets_recovered', 'planets_total', 'dev_tces_recovered', 'dev_tces_total', 'dev_quiet_with_signal', 'holdout_tces_recovered', 'holdout_tces_total', 'holdout_quiet_with_signal', 'seconds_per_star'],
+    (a, b) => Number(a.order) - Number(b.order),
+    (r) => (r.default === 'yes' ? 'is-default' : ''));
+  body('missed-body', 'missed_planets',
+    ['toi', 'disposition', 'period_days', 'depth_ppm', 'forced_snr', 'outcome'],
+    ['period_days', 'depth_ppm', 'forced_snr'],
+    (a, b) => Number(a.forced_snr) - Number(b.forced_snr));
+})();
+</script>
+
+<script>
+(() => {
+  const NS = 'http://www.w3.org/2000/svg';
+  const fmtN = d3.format(',');
+  const fmtP = (v) => (v < 1 ? String(v) : fmtN(v));
+
+  // Shared helpers for both drawings.
+  window.txFail = (el) => {
+    const f = document.createElement('div');
+    f.className = 'tx-fail';
+    f.textContent = 'Failed to load';
+    el.append(f);
+  };
+  window.txTip = (el) => {
+    const tip = document.createElement('div');
+    tip.className = 'tx-tip';
+    tip.hidden = true;
+    el.append(tip);
+    return (lines, px, py) => {
+      if (!lines) { tip.hidden = true; return; }
+      tip.replaceChildren();
+      lines.forEach((ln, i) => {
+        const div = document.createElement('div');
+        if (i === 0) div.className = 't';
+        div.textContent = ln;
+        tip.append(div);
+      });
+      tip.hidden = false;
+      const w = tip.offsetWidth, h = tip.offsetHeight, W = el.clientWidth;
+      let x = px + 12, y = py + 12;
+      if (x + w > W) x = Math.max(0, px - w - 12);
+      if (y + h > el.clientHeight) y = Math.max(0, py - h - 12);
+      tip.style.left = x + 'px';
+      tip.style.top = y + 'px';
+    };
+  };
+  const textWidth = (svg, s) => {
+    const t = document.createElementNS(NS, 'text');
+    t.textContent = s;
+    svg.append(t);
+    const w = t.getComputedTextLength();
+    t.remove();
+    return w;
+  };
+
+  dash.draw('pd', (el) => {
+    const d = dash.data('tois');
+    el.replaceChildren();
+    el.classList.toggle('dash-skeleton', d.status === 'loading');
+    if (d.status === 'error' || d.status === 'connect' || d.status === 'declined') { window.txFail(el); return; }
+    if (d.status !== 'ok') return;
+    const C = window.txConst;
+    const usable = d.data.filter((r) => r.period_days !== '' && Number(r.depth_ppm) > 0);
+    const pts = usable
+      .filter((r) => window.txState.pd === 'all' || r.planet_like === 'yes')
+      .map((r) => ({ r, P: Number(r.period_days), D: Number(r.depth_ppm) }));
+    const order = { 'Too weak in sector 1': 0, 'Period outside search': 1, 'Single transit': 1, 'Recovered': 2, 'Missed': 3 };
+    pts.sort((a, b) => (order[a.r.group] ?? 0) - (order[b.r.group] ?? 0));
+
+    const W = el.clientWidth || 600;
+    const H = Math.round(Math.max(300, Math.min(440, W * 0.66)));
+    const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`).attr('role', 'img')
+      .attr('aria-label', 'Scatter of TOI period against transit depth, coloured by outcome');
+    const xDom = [d3.min(usable, (r) => Number(r.period_days)) * 0.8, d3.max(usable, (r) => Number(r.period_days)) * 1.25];
+    const yDom = [d3.min(usable, (r) => Number(r.depth_ppm)) * 0.7, d3.max(usable, (r) => Number(r.depth_ppm)) * 1.4];
+    const xt = [0.1, 0.3, 1, 3, 10, 30, 100, 300, 1000, 3000].filter((v) => v >= xDom[0] && v <= xDom[1]);
+    const yt = [10, 30, 100, 300, 1000, 3000, 10000, 30000, 100000, 300000].filter((v) => v >= yDom[0] && v <= yDom[1]);
+    const m = { t: 14, r: 14, b: 40, l: 14 + d3.max(yt, (v) => textWidth(svg.node(), fmtN(v))) + 10 };
+    const x = d3.scaleLog(xDom, [m.l, W - m.r]);
+    const y = d3.scaleLog(yDom, [H - m.b, m.t]);
+
+    const band = svg.append('g');
+    const bx0 = Math.max(m.l, x(C.SEARCH_MIN_P)), bx1 = Math.min(W - m.r, x(C.SEARCH_MAX_P));
+    band.append('rect').attr('x', bx0).attr('y', m.t).attr('width', Math.max(0, bx1 - bx0)).attr('height', H - m.b - m.t)
+      .style('fill', 'var(--cds-chart-reference)').style('opacity', 0.1);
+    band.append('text').attr('x', (bx0 + bx1) / 2).attr('y', m.t + 14).attr('text-anchor', 'middle').text('Search range');
+
+    const grid = svg.append('g');
+    xt.forEach((v) => {
+      grid.append('line').attr('x1', x(v)).attr('x2', x(v)).attr('y1', m.t).attr('y2', H - m.b).style('stroke', 'var(--cds-chart-grid)');
+      grid.append('text').attr('x', x(v)).attr('y', H - m.b + 16).attr('text-anchor', 'middle').text(fmtP(v));
+    });
+    yt.forEach((v) => {
+      grid.append('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y(v)).attr('y2', y(v)).style('stroke', 'var(--cds-chart-grid)');
+      grid.append('text').attr('x', m.l - 8).attr('y', y(v) + 4).attr('text-anchor', 'end').text(fmtN(v));
+    });
+    grid.append('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', H - m.b).attr('y2', H - m.b).style('stroke', 'var(--cds-chart-axis)');
+    grid.append('text').attr('x', (m.l + W - m.r) / 2).attr('y', H - 6).attr('text-anchor', 'middle').text('Orbital period (days)');
+    grid.append('text').attr('transform', `translate(12, ${(m.t + H - m.b) / 2}) rotate(-90)`).attr('text-anchor', 'middle').text('Transit depth (ppm)');
+
+    const dots = svg.append('g');
+    pts.forEach((p) => {
+      p.x = x(p.P); p.y = y(p.D);
+      const c = window.txGroupColor(p.r.group);
+      const hollow = p.r.planet_like !== 'yes';
+      dots.append('circle').attr('cx', p.x).attr('cy', p.y).attr('r', 3.6)
+        .style('fill', hollow ? 'none' : c).style('stroke', c).style('stroke-width', hollow ? 1.5 : 0.6)
+        .style('fill-opacity', 0.85);
+    });
+    const ring = svg.append('circle').attr('r', 7).style('fill', 'none').style('stroke', 'var(--color-fg)').style('stroke-width', 1.5).attr('visibility', 'hidden');
+    const show = window.txTip(el);
+    const delaunay = d3.Delaunay.from(pts, (p) => p.x, (p) => p.y);
+    svg.on('pointermove', (ev) => {
+      const [mx, my] = d3.pointer(ev);
+      const i = pts.length ? delaunay.find(mx, my) : -1;
+      const p = pts[i];
+      if (!p || Math.hypot(p.x - mx, p.y - my) > 16) { ring.attr('visibility', 'hidden'); show(null); return; }
+      ring.attr('cx', p.x).attr('cy', p.y).attr('visibility', 'visible');
+      const r = p.r;
+      const scale = W / el.clientWidth;
+      show([
+        `TOI ${r.toi} · ${window.txDisposition[r.disposition] || r.disposition}`,
+        `Period ${r.period_days} d · depth ${fmtN(Number(r.depth_ppm))} ppm`,
+        `Duration ${r.duration_hours} h${r.forced_snr !== '' ? ` · forced SNR ${r.forced_snr}` : ''}`,
+        `${r.group}${r.sector1_tce === 'yes' ? ' · SPOC detected it in sector 1' : ''}`,
+      ], p.x / scale, p.y / scale);
+    });
+    svg.on('pointerleave', () => { ring.attr('visibility', 'hidden'); show(null); });
+  });
+
+  dash.draw('sky', (el) => {
+    const a = dash.data('tois');
+    const b = dash.data('tce_sample');
+    el.replaceChildren();
+    const cur = window.txState.sky === 'tois' ? a : b;
+    el.classList.toggle('dash-skeleton', cur.status === 'loading');
+    if (['error', 'connect', 'declined'].includes(cur.status)) { window.txFail(el); return; }
+    if (cur.status !== 'ok') return;
+
+    const rad = Math.PI / 180;
+    const all = [...(a.status === 'ok' ? a.data : []), ...(b.status === 'ok' ? b.data : [])];
+    // Field centre: the mean direction of every searched star.
+    let vx = 0, vy = 0, vz = 0;
+    all.forEach((r) => {
+      const ra = Number(r.ra) * rad, de = Number(r.dec) * rad;
+      vx += Math.cos(de) * Math.cos(ra); vy += Math.cos(de) * Math.sin(ra); vz += Math.sin(de);
+    });
+    let ra0 = Math.atan2(vy, vx), de0 = Math.atan2(vz, Math.hypot(vx, vy));
+    const proj = (raDeg, deDeg) => {
+      const da = raDeg * rad - ra0, de = deDeg * rad;
+      const cosc = Math.sin(de0) * Math.sin(de) + Math.cos(de0) * Math.cos(de) * Math.cos(da);
+      return {
+        x: -Math.cos(de) * Math.sin(da),
+        y: Math.cos(de0) * Math.sin(de) - Math.sin(de0) * Math.cos(de) * Math.cos(da),
+        vis: cosc > 0,
+      };
+    };
+    // Re-centre on the middle of the projected extent, so the stars fill the disc
+    // (the mean direction sits off-centre when the field is lopsided).
+    {
+      const P = all.map((r) => proj(Number(r.ra), Number(r.dec)));
+      const ex = d3.extent(P, (p) => p.x), ey = d3.extent(P, (p) => p.y);
+      const u = -(ex[0] + ex[1]) / 2, v = (ey[0] + ey[1]) / 2, rho = Math.hypot(u, v);
+      if (rho > 1e-9) {
+        const c = Math.asin(Math.min(1, rho));
+        const de1 = Math.asin(Math.cos(c) * Math.sin(de0) + (v * Math.sin(c) * Math.cos(de0)) / rho);
+        ra0 += Math.atan2(u * Math.sin(c), rho * Math.cos(c) * Math.cos(de0) - v * Math.sin(c) * Math.sin(de0));
+        de0 = de1;
+      }
+    }
+    const reach = d3.max(all, (r) => { const p = proj(Number(r.ra), Number(r.dec)); return Math.hypot(p.x, p.y); }) * 1.12;
+
+    const W = el.clientWidth || 600;
+    const Hs = Math.round(Math.max(320, Math.min(W, 520)));
+    const R = Hs / 2 - 8;
+    const k = R / reach;
+    const cx = W / 2, cy = Hs / 2;
+    const X = (p) => cx + k * p.x, Y = (p) => cy - k * p.y;
+    const svg = d3.select(el).append('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${Hs}`).attr('role', 'img')
+      .attr('aria-label', 'Sky map of the searched stars around the sector 1 field');
+    const clipId = 'tx-sky-clip';
+    svg.append('clipPath').attr('id', clipId).append('circle').attr('cx', cx).attr('cy', cy).attr('r', R);
+    svg.append('circle').attr('cx', cx).attr('cy', cy).attr('r', R).style('fill', 'none').style('stroke', 'var(--cds-chart-axis)');
+    const g = svg.append('g').attr('clip-path', `url(#${clipId})`);
+    const line = (pts) => {
+      let dstr = '', pen = false;
+      pts.forEach((p) => {
+        if (!p.vis) { pen = false; return; }
+        dstr += (pen ? 'L' : 'M') + X(p).toFixed(1) + ',' + Y(p).toFixed(1);
+        pen = true;
+      });
+      return dstr;
+    };
+    for (let de = -80; de <= 80; de += 10) {
+      const pts = d3.range(0, 361, 2).map((ra) => proj(ra, de));
+      g.append('path').attr('d', line(pts)).style('fill', 'none').style('stroke', 'var(--cds-chart-grid)').style('stroke-dasharray', '3 3');
+      const lp = proj(ra0 / rad, de);
+      const ly = Y(lp);
+      if (lp.vis && Math.abs(ly - cy) < R - 10) {
+        g.append('text').attr('x', cx + 4).attr('y', ly - 3).text(`${de < 0 ? '−' : ''}${Math.abs(de)}°`);
+      }
+    }
+    for (let h = 0; h < 24; h += 2) {
+      const pts = d3.range(-89.5, 90, 1).map((de) => proj(h * 15, de));
+      g.append('path').attr('d', line(pts)).style('fill', 'none').style('stroke', 'var(--cds-chart-grid)').style('stroke-dasharray', '3 3');
+      const inside = pts.filter((p) => p.vis && Math.hypot(X(p) - cx, Y(p) - cy) < R * 0.9);
+      if (inside.length) {
+        const far = inside.reduce((q, p) => (Math.hypot(X(p) - cx, Y(p) - cy) > Math.hypot(X(q) - cx, Y(q) - cy) ? p : q));
+        g.append('text').attr('x', X(far)).attr('y', Y(far)).attr('text-anchor', 'middle').text(`${h}h`);
+      }
+    }
+    const sp = proj(window.txConst.SEP.ra, window.txConst.SEP.dec);
+    if (sp.vis) {
+      const sx = X(sp), sy = Y(sp);
+      g.append('path').attr('d', `M${sx - 5},${sy}L${sx + 5},${sy}M${sx},${sy - 5}L${sx},${sy + 5}`).style('stroke', 'var(--color-fg-muted)').style('stroke-width', 1.5);
+      g.append('text').attr('x', sx + 8).attr('y', sy + 4).text('South ecliptic pole');
+    }
+
+    let pts;
+    if (window.txState.sky === 'tois') {
+      const order = { 'Too weak in sector 1': 0, 'Period outside search': 1, 'Single transit': 1, 'Recovered': 2, 'Missed': 3 };
+      pts = a.data.slice().sort((p, q) => (order[p.group] ?? 0) - (order[q.group] ?? 0)).map((r) => ({
+        r, c: window.txGroupColor(r.group), hollow: r.planet_like !== 'yes', size: 3.6,
+        lines: [
+          `TOI ${r.toi} · ${window.txDisposition[r.disposition] || r.disposition}`,
+          `TIC ${r.tic_id} · RA ${r.ra}° Dec ${r.dec}°`,
+          `Period ${r.period_days || '—'} d · depth ${fmtN(Number(r.depth_ppm))} ppm`,
+          r.group,
+        ],
+      }));
+    } else {
+      const order = { 'No signal': 0, 'Outside search': 1, 'Signal on a no-TCE star': 2, 'Recovered': 2, 'Missed': 3 };
+      pts = b.data.slice().sort((p, q) => (order[p.status] ?? 0) - (order[q.status] ?? 0)).map((r) => ({
+        r, c: window.txStatusColor(r.status), hollow: false, size: r.status === 'No signal' ? 2.6 : 3.6,
+        lines: r.kind === 'TCE'
+          ? [`TCE ${r.tce_id} · ${r.sample} sample`, `Period ${r.period_days} d · depth ${fmtN(Number(r.depth_ppm))} ppm · SPOC SNR ${r.spoc_snr}`, `${r.status}${r.toi_disposition ? ` · became a TOI (${r.toi_disposition})` : ''}`]
+          : [`TIC ${r.tic_id} · ${r.sample} sample, no TCE`, r.status === 'No signal' ? 'No signal reported' : `Signal at ${r.period_days} d · ${fmtN(Number(r.depth_ppm))} ppm · SNR ${r.our_snr}`],
+      }));
+    }
+    const dots = svg.append('g');
+    pts.forEach((p) => {
+      const q = proj(Number(p.r.ra), Number(p.r.dec));
+      p.x = X(q); p.y = Y(q);
+      dots.append('circle').attr('cx', p.x).attr('cy', p.y).attr('r', p.size)
+        .style('fill', p.hollow ? 'none' : p.c).style('stroke', p.c).style('stroke-width', p.hollow ? 1.5 : 0.6).style('fill-opacity', 0.85);
+    });
+    const ring = svg.append('circle').attr('r', 7).style('fill', 'none').style('stroke', 'var(--color-fg)').style('stroke-width', 1.5).attr('visibility', 'hidden');
+    const show = window.txTip(el);
+    const delaunay = d3.Delaunay.from(pts, (p) => p.x, (p) => p.y);
+    svg.on('pointermove', (ev) => {
+      const [mx, my] = d3.pointer(ev);
+      const p = pts.length ? pts[delaunay.find(mx, my)] : null;
+      if (!p || Math.hypot(p.x - mx, p.y - my) > 14) { ring.attr('visibility', 'hidden'); show(null); return; }
+      ring.attr('cx', p.x).attr('cy', p.y).attr('visibility', 'visible');
+      const scale = W / el.clientWidth;
+      show(p.lines, p.x / scale, p.y / scale);
+    });
+    svg.on('pointerleave', () => { ring.attr('visibility', 'hidden'); show(null); });
+  });
+})();
+</script>
+</div>
+</body>
+</html>

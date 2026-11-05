@@ -38,6 +38,7 @@ Every term, field and outcome — ours and SPOC's `tce_*` columns — is defined
 | `_manifest.py` | which stars the sector observed, from the bucket itself |
 | `pilot.py` | `python -m tesstransit.pilot` — stratified sample → search → match |
 | `planets.py` | `python -m tesstransit.planets` — every TOI in the sector → search → match against the TOI, with each ephemeris forced on our flux |
+| `site.py` | `python -m tesstransit.site` — the stand-alone results page (period–depth chart, sky map, experiments) from finished runs; published at rlemke.github.io/facetwork-maps/space/tess-sector1/ |
 | `_match.py` | the TCE table and the matching rules: `recovered` / `recovered_alias` / `missed` (with a cause) / `unmatched` |
 
 ## Thresholds are provisional

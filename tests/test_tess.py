@@ -572,3 +572,17 @@ def test_search_records_the_knot_spacing_it_used():
     )
     assert res.knot_days == [0.5]
     assert abs(res.signals[0].period_days - 8.14) < 0.05
+
+
+# --- the stand-alone results page ---------------------------------------------
+
+
+def test_site_page_embeds_data_safely():
+    from tesstransit import site
+
+    page = site.render({"tois": [{"toi": "</script><b>x"}], "tce_sample": [], "variants": []},
+                       "2026-11-05")  # fmt: skip
+    assert "/*__DATA__*/" not in page and "2026-11-05" in page
+    # A value containing "</script>" must not close the data script early.
+    assert page.count("</script>") == page.count("<script")
+    assert "<\\/script><b>x" in page
