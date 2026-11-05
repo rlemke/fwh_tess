@@ -144,17 +144,35 @@ def parse_tois(text: str) -> list[TOI]:
     return out
 
 
-def _tce_backed(toi: TOI, tces: list[mt.TCE]) -> mt.TCE | None:
-    """The sector TCE at (an alias of) this TOI's period, if SPOC made one."""
-    if toi.period_days is None:
-        return None
-    for t in tces:
-        if any(
-            abs(t.period_days / (k * toi.period_days) - 1) < 0.01
-            for k in mt.DEFAULT_ALIASES
-        ):
-            return t
-    return None
+def tce_backing(
+    tois: list[TOI], tces: list[mt.TCE], cfg: mt.MatchConfig | None = None
+) -> dict[str, mt.TCE | None]:
+    """The sector TCE behind each TOI on ONE star, if SPOC made one.
+
+    Assigned like the matcher: direct periods first, then aliases, each TCE
+    to one TOI, closest period first, within ``period_rel_tol``. A first-match
+    over a 1% alias window gave L 98-59 d (7.4507 d) the TCE of planet c
+    (3.6905 d; 2x is 0.94% off) while d's own TCE sat unused, and the search
+    was then scored against c's transit times (measured, sector 2).
+    """
+    cfg = cfg or mt.MatchConfig()
+    out: dict[str, mt.TCE | None] = {t.toi: None for t in tois}
+    free = list(tces)
+    for direct in (True, False):
+        cands = sorted(
+            (abs(c.period_days / (k * t.period_days) - 1), t.toi, c.tce_id, t, c)
+            for t in tois
+            if t.period_days
+            for c in tces
+            for k in cfg.aliases
+            if (k == 1.0) == direct
+            and abs(c.period_days / (k * t.period_days) - 1) <= cfg.period_rel_tol
+        )
+        for _, _, _, t, c in cands:
+            if out[t.toi] is None and c in free:
+                out[t.toi] = c
+                free.remove(c)
+    return out
 
 
 def classify(
@@ -255,7 +273,12 @@ def main(argv: list[str] | None = None) -> int:
         t for t in parse_tois(args.toi_csv.read_text()) if args.sector in t.sectors
     ]
     catalogue = {t.toi: t for t in all_tois}
-    backing = {t.toi: _tce_backed(t, tces_by.get(t.tic_id, [])) for t in all_tois}
+    tois_by: dict[int, list[TOI]] = {}
+    for t in all_tois:
+        tois_by.setdefault(t.tic_id, []).append(t)
+    backing: dict[str, mt.TCE | None] = {}
+    for tic, ts in tois_by.items():
+        backing.update(tce_backing(ts, tces_by.get(tic, [])))
     tois = [local_ephemeris(t, backing[t.toi]) for t in all_tois if t.tic_id in targets]
     by_star: dict[int, list[TOI]] = {}
     for t in tois:

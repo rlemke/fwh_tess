@@ -202,3 +202,47 @@ signals on TOI stars that match no TOI down 44%. TCE agreement is flat
 
 Remaining TCE-backed planet misses with 7a: 140.01 (above), 119.01 (SPOC SNR
 8.0, ours 6.5), 4186.01.
+
+## Sector 2: the first sector nothing was tuned on (2026-11-05)
+
+Spline default (7a), unchanged. `python -m tesstransit.planets --sector 2`
+and `python -m tesstransit.pilot --sector 2` (seed 1: 60 TCE stars across
+SPOC's SNR range + 40 random no-TCE stars). SPOC's sector-2 table: 1,062
+TCEs on 726 stars; 15,994 2-minute light curves. 0 failed stars in either run.
+
+| | Sector 1 | Sector 2 |
+|---|---|---|
+| TCE-backed planet-like TOIs recovered | 61 / 64 (95%) | **61 / 62 (98%)** |
+| Confirmed + known planets among them | 38 / 38 | **40 / 40** |
+| Planet-like TOIs with no sector TCE, recovered | 5 | **15** |
+| TCE sample recovered (incl. alias) | 34 / 87 | 53 / 87 |
+| No-TCE stars with a signal | 4 / 40 | 6 / 40 (10 signals) |
+| Signals on TOI stars matching no TOI | 29 | 40 |
+
+**Planet recovery holds on unseen data.** The one TCE-backed miss is TOI
+214.01 (PC, 18.6 d, two transits, forced SNR 7.7; SPOC 8.4): near threshold
+in both pipelines.
+
+**TCE recovery is not comparable between sectors.** Sector 1's sample has a
+median TCE period of 10.7 d (48 of 87 above 10 d); sector 2's 5.7 d (29 of
+87). Short periods mean many transits. Sector 1, the mission's first, carries
+many long-period TCEs that vetting discarded; the rate measures the
+reference as much as the search.
+
+**Fifteen planet candidates SPOC made no sector-2 TCE for were found** at
+our SNR 7.6–13 (forced 5.0–11.4), five of them confirmed planets (125.02,
+178.03, 206.01, 220.01, 237.01). SPOC reached these only by combining
+sectors. A chance match is implausible (period within 0.5% AND transits
+within half a duration), but these sit near threshold, where the search's
+optimistic SNR (best of many trials) is largest.
+
+### A bug the second sector found
+
+`_tce_backed` paired each TOI with the FIRST TCE within 1% of any alias.
+On L 98-59 (TOI 175) it gave planet d (7.4507 d) planet c's TCE (3.6905 d;
+2x is 0.94% off) while d's own TCE (7.451 d) went unused, so d was scored
+against c's transit times: "missed, weak after detrend", forced SNR 1.3,
+for a planet SPOC found at SNR 23.7. Backing is now assigned per star like
+the matcher (direct first, closest period, each TCE once, 0.5%). It changed
+one TOI per sector: 175.02 is now recovered; in sector 1, 184.01 (an EB)
+moved from a direct to an alias match. Sector 1's headline is unchanged.

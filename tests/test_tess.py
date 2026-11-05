@@ -586,3 +586,25 @@ def test_site_page_embeds_data_safely():
     # A value containing "</script>" must not close the data script early.
     assert page.count("</script>") == page.count("<script")
     assert "<\\/script><b>x" in page
+
+
+def test_tce_backing_pairs_each_toi_with_its_own_tce():
+    """L 98-59, sector 2: d's period is 0.94% from 2x c's; d has its own TCE."""
+    from tesstransit import planets as pl
+
+    def toi(n, p):
+        return pl.TOI(f"175.0{n}", 7, "CP", p, 1355.0, 1.0, 1000.0, (2,), "SPOC")
+
+    tois = [toi(1, 3.6907), toi(2, 7.4507), toi(3, 2.2531)]
+    tces = [mt.TCE(f"x-0{i}", 7, i, p, 1355.0, 1.0, 1000.0, 10.0, 3)
+            for i, p in ((1, 3.6905), (2, 7.451), (3, 2.2531))]  # fmt: skip
+    got = {k: v.tce_id for k, v in pl.tce_backing(tois, tces).items()}
+    assert got == {"175.01": "x-01", "175.02": "x-02", "175.03": "x-03"}
+    # A TCE at an alias still backs a TOI with no direct TCE, but only one TOI.
+    one = mt.TCE("z", 7, 1, 2 * 3.6907, 1355.0, 1.0, 1.0, 9.0, 2)
+    shared = pl.tce_backing([toi(1, 3.6907), toi(4, 3.6907)], [one])
+    assert [v.tce_id for v in shared.values() if v] == ["z"]
+    halved = pl.tce_backing(
+        [toi(2, 7.4507)], [mt.TCE("y", 7, 1, 3.72535, 1355.0, 1.0, 1.0, 9.0, 4)]
+    )
+    assert halved["175.02"].tce_id == "y"
