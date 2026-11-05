@@ -341,3 +341,32 @@ What it does well, it does very well: no-TCE stars with a signal halve (92 →
 it on amplitude relative to the noise (so quiet stars are left alone) and
 masks the strongest BLS events before fitting; or use it as a second pass only
 on stars where the default leaves a sub-day variability peak.
+
+### Version 2: gated, with transit masking (2026-11-05)
+
+Pre-whitening only while the hour-binned spline residual scatters ≥ 2× white
+noise, and the variability fit refitted without stretches dipping below 3σ in
+1-hour running means (b29d381). Same stars, sectors 1–13.
+
+| Sectors 1–13 | Default (spline) | Pre-whitening v1 | **Pre-whitening v2** |
+|---|---|---|---|
+| Planet-like TOIs SPOC detected, found | 676 / 707 (95.6%) | 657 (92.9%) | **682 / 707 (96.5%, 94.8–97.6)** |
+| Confirmed + known | 369 / 383 | 368 | **373 / 383** |
+| No-TCE stars with a signal | 92 / 520 (17.7%) | 44 (8.5%) | 70 / 520 (13.5%) |
+| EB / V / IS TOIs found | 281 | 244 | 280 |
+| Signals on TOI stars matching no TOI | 491 | 348 | 410 |
+| TCE sample | 630 / 1,100 | 487 | 539 / 1,097 |
+
+**Planets: 8 gained, 2 lost (+6).** Gained, all on fast variables: 140.01,
+540.01 (twice), 865.01, 4325.01, 4180.01, 837.01, 1066.01. Lost: TOI 252.01 in
+sectors 2 and 11, a 1.002 d planet on a star varying at 0.998 d, which no
+periodicity filter can separate. The gate restored every v1 loss checked.
+
+**The TCE-sample drop is SPOC's false alarms, not planets.** All 109 TCEs v2
+stops recovering never became TOIs, and 107 have periods under 1.5 d (median
+0.36 d): stellar variability SPOC flagged and its vetters rejected. 18 TCEs
+were gained, one a known planet. EB/V TOIs are unchanged (281 → 280).
+
+The planet gain is small next to the interval (+0.9 points, intervals
+overlap), but it is paired, same stars, and every gain and loss has a
+mechanism. A sign test on 8 gained vs 2 lost gives p ≈ 0.055 (one-sided).
