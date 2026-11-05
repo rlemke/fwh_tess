@@ -246,3 +246,56 @@ for a planet SPOC found at SNR 23.7. Backing is now assigned per star like
 the matcher (direct first, closest period, each TCE once, 0.5%). It changed
 one TOI per sector: 175.02 is now recovered; in sector 1, 184.01 (an EB)
 moved from a direct to an alias match. Sector 1's headline is unchanged.
+
+## Sectors 1–13: the first year of the southern sky (2026-11-05)
+
+Spline default, no further tuning; sectors 3–13 run back to back on 8
+workers in 37 minutes. Per sector: every TOI listing it on a 2-minute star,
+plus one TCE sample (60 TCE stars across SPOC's SNR range + 40 random no-TCE
+stars). One star failed of ~4,000 (sector 4, TIC 300038935: median PDCSAP
+flux negative, refused at load rather than searched).
+
+| Sector | Planet TOIs SPOC detected, found | CP + KP | No-sector-TCE planets in data, found | TCE sample | No-TCE stars with a signal |
+|---|---|---|---|---|---|
+| 1 | 61 / 64 | 38 / 38 | 5 / 6 | 34 / 87 | 4 / 40 |
+| 2 | 61 / 62 | 40 / 40 | 15 / 16 | 53 / 87 | 6 / 40 |
+| 3 | 33 / 36 | 22 / 23 | 5 / 6 | 49 / 82 | 4 / 40 |
+| 4 | 43 / 47 | 26 / 28 | 8 / 12 | 47 / 80 | 9 / 40 |
+| 5 | 47 / 52 | 31 / 32 | 11 / 12 | 53 / 90 | 7 / 40 |
+| 6 | 46 / 50 | 32 / 35 | 7 / 8 | 52 / 83 | 7 / 40 |
+| 7 | 47 / 47 | 27 / 27 | 5 / 6 | 54 / 92 | 10 / 40 |
+| 8 | 34 / 35 | 18 / 19 | 9 / 9 | 57 / 83 | 7 / 40 |
+| 9 | 76 / 78 | 36 / 36 | 4 / 4 | 50 / 83 | 6 / 40 |
+| 10 | 64 / 68 | 29 / 33 | 6 / 7 | 48 / 95 | 6 / 40 |
+| 11 | 46 / 47 | 25 / 26 | 10 / 11 | 38 / 85 | 7 / 40 |
+| 12 | 47 / 47 | 17 / 17 | 12 / 12 | 44 / 75 | 14 / 40 |
+| 13 | 71 / 74 | 28 / 29 | 7 / 7 | 51 / 78 | 5 / 40 |
+
+Pooled, with Wilson 95% intervals:
+
+| Measure | Count | Rate | 95% interval |
+|---|---|---|---|
+| Planet-like TOIs SPOC detected in the same sector | 676 / 707 | **95.6%** | 93.8–96.9% |
+| Confirmed + known planets among them | 369 / 383 | **96.3%** | 94.0–97.8% |
+| Planet TOIs with no sector TCE, strong enough in the sector | 104 / 116 | 89.7% | 82.8–94.0% |
+| TCE sample (in the period range) | 630 / 1,100 | 57.3% | 54.3–60.2% |
+| No-TCE stars with a signal (unvetted) | 92 / 520 | 17.7% | 14.7–21.2% |
+
+Sector 1–2's 100% on confirmed planets did not hold: 14 of 383 were missed
+over the year. The rate is now measured to about ±2 points.
+
+### The 31 TCE-backed planet misses
+
+| Cause | Misses | Examples |
+|---|---|---|
+| Fast stellar variability (< 1 d) the 0.5 d knot floor cannot follow; its residual takes the signal slots and swamps the transit | ~10 | 1066.01 (KP, 13,793 ppm, forced 2.7: a 0.63 d variable), 6551.01, 540.01 (twice), 837.01, 140.01 |
+| Near threshold in both pipelines (forced SNR ≲ 8.5, SPOC ≲ 9) | ~12 | 214.01, 697.01, 536.01, 1080.01 |
+| Reached, then refused by the SDE gate | ≥ 2 | 216.02 (CP, TTV pair in resonance: best peak SNR 42 at a 4.27 d blend of both planets, SDE 8.3 < 11) |
+| Multi-planet star: signal slots used up first | 2 | 561.01, 175.03 (L 98-59 b) |
+| Other / not yet diagnosed | ~5 | 179.01 (forced 12.6), 1233.01 (forced 11.4; a peak at 14.16 d was rejected) |
+
+The first two dominate, and only the first is a fixable loss: variability
+faster than ~1 day needs either a variability model (a periodogram-driven
+sinusoid fit, or a GP) or a knot floor tied to the trial duration, which
+pilots 6b/6c and 7b showed costs long transits. Counts are from an automatic
+classification and need a per-star look before quoting.
