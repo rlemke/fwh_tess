@@ -167,3 +167,38 @@ a binomial 1σ of about ±3.4 points.
    pipelines found. TCE-backed TOIs now use SPOC's in-sector epoch with the
    TOI period; others keep the catalogue epoch with its propagated
    uncertainty reported (1 of 151 exceeds the match tolerance).
+
+## Detrending that follows the star (2026-11-05)
+
+Each variant scored on all three samples: TCE-backed planet-like TOIs
+(planet sample), TCEs recovered incl. alias and no-TCE stars with a signal
+(development and hold-out samples).
+
+| Variant | Planets (of 64) | Planet-sample signals matching no TOI | Dev: TCEs / no-TCE stars with signal | Hold-out: TCEs / no-TCE | s/star |
+|---|---|---|---|---|---|
+| Pilot 5: 1-day running median | 59 | 52 | 36 / 8 | 34 / 7 | 7.7 |
+| **7a: clipped cubic spline, knots 0.5–3 d by BIC per star** | **61** | **29** | 34 / **4** | 35 / **5** | 5.1 |
+| 7b: 7a + a 0.25–0.4 d knot layer for ≤ 2 h boxes on stars at the 0.5 d floor | 61 | 29 | 35 / 4 | 34 / 5 | 4.4 |
+
+**New default: 7a.** Planets +2 net (gained DS Tuc Ab at SNR 59, 139.01,
+210.01; lost 4186.01), false alarms on no-TCE stars roughly halved, and
+signals on TOI stars that match no TOI down 44%. TCE agreement is flat
+(dev −2, neither a TOI; hold-out +3 −2).
+
+- **DS Tuc Ab** shows why: the 1-day median left flat-bottomed residuals ~1%
+  deep on a 2.85 d, 2% rotation; the 0.5 d spline leaves ~0.2% wiggles, and
+  the forced SNR went 0.9 → 7.1.
+- **4186.01** was not eaten by the detrend (forced 13.4 → 11.1); an unrelated
+  11 d peak (SNR 14) outranked its two transits. A near-threshold swap.
+- **7b was dropped, and its code removed.** On TOI 140.01's star (a 1.12 d,
+  0.25% oscillation) the flexible layer does expose the transit (forced 3.1
+  → 7.9 at 0.3 d knots), but the stiff layer's residual harmonics at 0.887 d
+  took all three signal slots first. And the 0.5 d floor is hit on 28–40% of
+  stars, not a few: the layer added trials everywhere for no measured gain.
+  Fixing 140.01 means not searching the stiff layer on such stars, which
+  re-opens the long-transit loss of 6b/6c.
+- On white noise the spline default keeps the noise peaks of the three
+  test seeds below SNR 7.1 (5.3–6.6, vs 7.2–7.8 with the median).
+
+Remaining TCE-backed planet misses with 7a: 140.01 (above), 119.01 (SPOC SNR
+8.0, ours 6.5), 4186.01.

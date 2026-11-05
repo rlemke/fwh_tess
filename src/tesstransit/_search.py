@@ -25,6 +25,7 @@ signal below threshold or at ``max_signals``.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from itertools import pairwise
 from typing import Any
 
 import numpy as np
@@ -43,7 +44,14 @@ class SearchConfig:
     #     variability that a 1-day window leaves (measured: most no-TCE pilot
     #     "signals" were 0.36-1.1 d periodicities), but would flatten a long
     #     transit -- so each duration gets the shortest window that keeps it.
-    detrend_method: str = "median"
+    #   "spline": an iteratively sigma-clipped cubic spline whose knot spacing
+    #     is chosen PER STAR by BIC from spline_knot_days (Vanderburg &
+    #     Johnson 2014's K2 recipe; Shallue & Vanderburg 2018). A running
+    #     median cannot follow curvature: on a 2.85 d, 2% rotation it leaves
+    #     ~4000 ppm residuals, and DS Tuc Ab (SPOC SNR 25) measured SNR 0.9
+    #     on our flux. Dense knots for an active star, sparse for a quiet one.
+    detrend_method: str = "spline"
+    spline_knot_days: tuple[float, ...] = (0.5, 0.75, 1.0, 1.5, 2.0, 3.0)
     detrend_per_duration: bool = False
     detrend_window_days: float = 1.0
     detrend_window_factor: float = 3.0
@@ -90,12 +98,22 @@ class SearchConfig:
     mask_width_factor: float = 1.5  # mask this many durations around each transit
 
     def validate(self) -> None:
-        if self.detrend_method not in ("median", "biweight"):
+        if self.detrend_method not in ("median", "biweight", "spline"):
             raise ValueError(f"unknown detrend_method {self.detrend_method!r}")
         if self.detrend_per_duration and self.detrend_window_factor < 3:
             raise ValueError("detrend_window_factor under 3 would flatten the transits")
         longest = max(self.durations_hours) / 24.0
-        if not self.detrend_per_duration and self.detrend_window_days < 3 * longest:
+        if self.detrend_method == "spline" and self.detrend_per_duration:
+            raise ValueError("spline detrending has its own layers; no per_duration")
+        if self.detrend_method == "spline":
+            # A cubic spline bends within ~one knot interval; it has to be
+            # longer than the longest transit or it fits the transit too.
+            if min(self.spline_knot_days) < 1.5 * longest:
+                raise ValueError(
+                    f"spline knot spacing {min(self.spline_knot_days)} d is under 1.5x "
+                    f"the longest duration searched ({longest:.3f} d)"
+                )
+        elif not self.detrend_per_duration and self.detrend_window_days < 3 * longest:
             raise ValueError(
                 f"detrend window {self.detrend_window_days} d is under 3x the longest "
                 f"duration searched ({longest:.3f} d); it would flatten those transits"
@@ -164,6 +182,8 @@ class SearchResult:
     final_period_days: float | None = None
     final_epoch_btjd: float | None = None
     vetoes: list[Veto] = field(default_factory=list)
+    # Spline detrending only: the knot spacing BIC chose for each layer.
+    knot_days: list[float] = field(default_factory=list)
 
 
 def running_median(
@@ -179,12 +199,94 @@ def running_median(
     return np.array([np.median(flux[a:b]) for a, b in zip(lo, hi)])
 
 
+def _segments(time: np.ndarray, gap_days: float) -> list[slice]:
+    """Contiguous stretches of data, split where the cadence stops for > gap."""
+    cuts = np.flatnonzero(np.diff(time) > gap_days) + 1
+    edges = [0, *cuts.tolist(), len(time)]
+    return [slice(a, b) for a, b in pairwise(edges) if b > a]
+
+
+def _spline_fit(
+    t: np.ndarray, f: np.ndarray, knot_days: float, keep: np.ndarray
+) -> np.ndarray:
+    """Least-squares cubic spline through the ``keep`` points, evaluated at ``t``."""
+    from scipy.interpolate import LSQUnivariateSpline
+
+    tk, fk = t[keep], f[keep]
+    n_int = int((tk[-1] - tk[0]) // knot_days)
+    if n_int < 1 or len(tk) < 20:
+        # Too short for a spline at this spacing: a quadratic, as a spline
+        # with no interior knots but robust to a 3-point segment.
+        deg = min(2, max(0, len(tk) - 1))
+        return np.polyval(np.polyfit(tk - tk[0], fk, deg), t - tk[0])
+    knots = tk[0] + knot_days * np.arange(1, n_int + 1)
+    knots = knots[knots < tk[-1] - 0.5 * knot_days]
+    # Schoenberg-Whitney: every knot interval must hold data, else the fit is
+    # singular. Drop knots in gaps rather than fail.
+    counts = np.histogram(tk, bins=[tk[0], *knots, tk[-1]])[0]
+    while len(knots) and (counts < 4).any():
+        bad = int(np.argmin(counts))
+        knots = np.delete(knots, min(bad, len(knots) - 1))
+        counts = np.histogram(tk, bins=[tk[0], *knots, tk[-1]])[0]
+    return LSQUnivariateSpline(tk, fk, knots, k=3)(t)
+
+
+def spline_trend(
+    time: np.ndarray,
+    flux: np.ndarray,
+    knot_days: tuple[float, ...],
+    clip_sigma: float = 3.0,
+    max_iter: int = 5,
+    gap_days: float = 0.5,
+) -> tuple[np.ndarray, float]:
+    """``(trend, knot spacing chosen)``: the clipped spline with the lowest BIC.
+
+    Each candidate spacing is fitted per data segment, clipping points more
+    than ``clip_sigma`` robust sigmas from the fit and refitting, so a deep
+    transit does not drag the trend down. BIC = chi^2 + n_params ln N with
+    the WHITE-noise sigma from point-to-point differences, so a spacing only
+    wins by explaining variability the noise cannot (Vanderburg+ 2016).
+    """
+    segs = _segments(time, gap_days)
+    sigma_w = 1.4826 * np.median(np.abs(np.diff(flux))) / np.sqrt(2.0)
+    best: tuple[float, np.ndarray, float] | None = None
+    for kd in knot_days:
+        trend = np.empty_like(flux)
+        keep_all = np.ones(len(flux), dtype=bool)
+        n_params = 0
+        for sl in segs:
+            t, f = time[sl], flux[sl]
+            keep = np.ones(len(t), dtype=bool)
+            for _ in range(max_iter):
+                fit = _spline_fit(t, f, kd, keep)
+                r = f - fit
+                sig = 1.4826 * np.median(np.abs(r[keep] - np.median(r[keep])))
+                new = np.abs(r) < clip_sigma * sig
+                if np.array_equal(new, keep) or new.sum() < 20:
+                    break
+                keep = new
+            trend[sl], keep_all[sl] = fit, keep
+            n_params += int((t[-1] - t[0]) // kd) + 4
+        resid = (flux - trend)[keep_all]
+        bic = float(np.sum(resid**2) / sigma_w**2 + n_params * np.log(keep_all.sum()))
+        if best is None or bic < best[0]:
+            best = (bic, trend, kd)
+    assert best is not None
+    return best[1], best[2]
+
+
 def detrend(
-    time: np.ndarray, flux: np.ndarray, window_days: float, method: str = "median"
+    time: np.ndarray,
+    flux: np.ndarray,
+    window_days: float,
+    method: str = "median",
+    knot_days: tuple[float, ...] = (1.0,),
 ) -> np.ndarray:
     """``flux`` divided by its trend. May contain NaN (biweight, sparse edges)."""
     if np.any(np.diff(time) < 0):
         raise ValueError("time must be sorted ascending")
+    if method == "spline":
+        return flux / spline_trend(time, flux, knot_days)[0]
     if method == "median":
         return flux / running_median(time, flux, window_days)
     if method == "biweight":
@@ -223,7 +325,11 @@ def _layers(time: np.ndarray, flux: np.ndarray, cfg: SearchConfig) -> list[_Laye
         ]
     out = []
     for window, durs in groups:
-        flat = detrend(time, flux, window, cfg.detrend_method)
+        if cfg.detrend_method == "spline":
+            trend, window = spline_trend(time, flux, cfg.spline_knot_days)
+            flat = flux / trend
+        else:
+            flat = detrend(time, flux, window, cfg.detrend_method)
         valid = np.isfinite(flat)
         out.append(_Layer(durs, flat, valid, _mad_sigma(flat[valid]), window))
     return out
@@ -403,6 +509,9 @@ def search(
         config=cfg.to_dict(),
         n_points=len(time),
         scatter_ppm=longest.scatter * 1e6,
+        knot_days=[ly.window_days for ly in layers]
+        if cfg.detrend_method == "spline"
+        else [],
     )
     periods = np.exp(
         np.linspace(

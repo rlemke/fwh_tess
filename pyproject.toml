@@ -11,6 +11,7 @@ dependencies = [
     "numpy>=1.26",
     "astropy>=6.0",      # FITS reader + BoxLeastSquares
     "boto3>=1.28",       # anonymous reads of MAST's public S3 copy of TESS
+    "scipy>=1.11",       # spline detrending
 ]
 
 [project.optional-dependencies]

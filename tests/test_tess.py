@@ -154,7 +154,7 @@ def test_load_lc_all_flagged_raises(tmp_path):
 
 def test_config_refuses_window_that_would_flatten_transits():
     with pytest.raises(ValueError, match="flatten"):
-        sr.SearchConfig(detrend_window_days=0.5).validate()
+        sr.SearchConfig(detrend_method="median", detrend_window_days=0.5).validate()
 
 
 def test_detrend_removes_slow_trend_keeps_transit():
@@ -184,13 +184,15 @@ def test_search_finds_second_planet_after_masking_first():
 @pytest.mark.parametrize("seed", [1, 4, 10])  # the seeds whose noise peak beat SNR 7.1
 def test_search_on_noise_reports_why_it_stopped(seed):
     # The DEFAULT grid: SDE thresholds are calibrated on it, not on FAST.
-    cfg = sr.SearchConfig()
+    cfg = sr.SearchConfig(detrend_method="median")
     t, f = _sector(seed=seed)
     res = sr.search(t, f, 42, 1, cfg)
     assert res.signals == []
     assert res.stop_reason == "below_threshold"
     # SNR alone would have accepted this noise peak; the SDE gate is what refuses it.
     assert res.final_snr > cfg.snr_threshold and res.final_sde < cfg.sde_threshold
+    # The spline default reports nothing on the same noise either.
+    assert sr.search(t, f, 42, 1, sr.SearchConfig()).signals == []
 
 
 # --- the TCE table and matching ---------------------------------------------
@@ -525,3 +527,48 @@ def test_local_ephemeris_keeps_toi_period_takes_tce_epoch():
     assert loc.epoch_source == "tce" and pl.local_ephemeris(toi, None) is toi
     # 50 orbits back: sqrt(0.013^2 + (50 * 0.00057)^2) d
     assert pl.epoch_sigma_hours(toi, 1338.0) == pytest.approx(0.7516, rel=1e-3)
+
+
+# --- spline detrending --------------------------------------------------------
+
+
+def _spotted(seed=3):
+    """A DS Tuc-like star: 2% rotation at 2.85 d, plus a 3 h, 3000 ppm transit."""
+    t, f = _sector(planets=[(8.14, 1332.3, 3.0, 3000.0)], noise_ppm=300.0, seed=seed)
+    return t, f + 0.02 * np.sin(2 * np.pi * t / 2.85)
+
+
+def test_spline_follows_rotation_the_median_cannot():
+    t, f = _spotted()
+    eph = [("p", 8.14, 1332.3, 3.0)]
+    from tesstransit import pilot
+
+    med = pilot.forced_stats(t, f, eph, sr.SearchConfig(detrend_method="median"))
+    med = med["p"]["snr_red"]
+    spl = pilot.forced_stats(t, f, eph, sr.SearchConfig(detrend_method="spline"))
+    assert spl["p"]["snr_red"] > 3 * med and spl["p"]["snr_red"] > 15
+
+
+def test_spline_bic_picks_dense_knots_for_active_sparse_for_quiet():
+    t, f = _spotted()
+    knots = (0.5, 1.0, 3.0)
+    assert sr.spline_trend(t, f, knots)[1] == 0.5
+    tq, fq = _sector(noise_ppm=300.0)
+    fq = fq - 0.002 * np.sin(2 * np.pi * tq / 9.0)  # remove _sector's slow trend
+    assert sr.spline_trend(tq, fq, knots)[1] == 3.0
+
+
+def test_spline_knots_shorter_than_transits_are_refused():
+    with pytest.raises(ValueError, match="knot spacing"):
+        sr.SearchConfig(
+            detrend_method="spline", spline_knot_days=(0.25, 1.0)
+        ).validate()
+
+
+def test_search_records_the_knot_spacing_it_used():
+    t, f = _spotted()
+    res = sr.search(
+        t, f, 42, 1, sr.SearchConfig(detrend_method="spline", n_periods=5000)
+    )
+    assert res.knot_days == [0.5]
+    assert abs(res.signals[0].period_days - 8.14) < 0.05

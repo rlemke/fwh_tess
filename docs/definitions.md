@@ -49,10 +49,11 @@ the exact search that produced it.
 
 | Field | Default | Meaning |
 |---|---|---|
-| `detrend_method` | `median` | `median` (running median) or `biweight` (Tukey biweight via wotan, needs the `[wotan]` extra). Measured equivalent on the pilot (experiments.md, 6a). |
+| `detrend_method` | `spline` | `spline` (iteratively 3σ-clipped cubic spline, knot spacing chosen per star by BIC; experiments.md, 7a), `median` (running median, the default through pilot 6) or `biweight` (Tukey biweight via wotan, needs the `[wotan]` extra; ≈ median, 6a). |
+| `spline_knot_days` | 0.5, 0.75, 1, 1.5, 2, 3 | Candidate knot spacings; BIC (χ² against the white-noise σ from point-to-point differences + n_params ln N) picks one per star, recorded in the result as `knot_days`. Must be ≥ 1.5 × the longest duration searched, or the spline fits the transit. |
 | `detrend_per_duration` | False | True = one flattening per trial duration with window `detrend_window_factor` × duration (floored at `detrend_min_window_days`). Measured WORSE (experiments.md, 6b/6c): transits are longer than the box that finds them. |
 | `detrend_window_factor`, `detrend_min_window_days` | 3.0, 0.25 | Only used with `detrend_per_duration`. |
-| `detrend_window_days` | 1.0 | Width of the running median divided out of the flux. Anything slower is removed — **including a transit longer than about a third of it**, which is why it must be ≥ 3× the longest duration searched. |
+| `detrend_window_days` | 1.0 | (median / biweight only.) Width of the running median divided out of the flux. Anything slower is removed — **including a transit longer than about a third of it**, which is why it must be ≥ 3× the longest duration searched. |
 | `min_period_days` / `max_period_days` | 0.25 / 26.0 | The period grid. One sector spans ~27 d, so 26 d is the longest period that can show two transits. A TCE outside this range is `outside_search_grid`. |
 | `n_periods` | 24000 | Trial periods, log-spaced across the grid. |
 | `min_transits` | 2 | A peak is only accepted if this many transits have data. One transit fits every long period that puts the next in a gap, so it is not a periodic detection. |

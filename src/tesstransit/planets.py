@@ -229,13 +229,18 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--keep-lc", action="store_true")
     ap.add_argument(
+        "--detrend-method", choices=["median", "biweight", "spline"], default="spline"
+    )
+    ap.add_argument(
         "--reuse",
         action="store_true",
         help="re-match the run's existing results.jsonl instead of searching again",
     )
     args = ap.parse_args(argv)
 
-    cfg = sr.SearchConfig()
+    cfg = sr.SearchConfig(
+        detrend_method=args.detrend_method,
+    )
     cfg.validate()
     args.out.mkdir(parents=True, exist_ok=True)
     client = lc.s3_client()

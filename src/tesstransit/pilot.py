@@ -59,7 +59,9 @@ def forced_stats(
     erases shows up here as a low SNR: that separates "not in the data we
     search" from "in the data, and the search did not find it".
     """
-    f = sr.detrend(time_, flux, cfg.detrend_window_days, cfg.detrend_method)
+    f = sr.detrend(
+        time_, flux, cfg.detrend_window_days, cfg.detrend_method, cfg.spline_knot_days
+    )
     ok = np.isfinite(f)
     t, f = time_[ok], f[ok]
     out: dict[str, dict[str, Any]] = {}
@@ -214,7 +216,7 @@ def main(argv: list[str] | None = None) -> int:
         help="earlier run dir(s): draw a sample sharing none of their stars",
     )
     ap.add_argument(
-        "--detrend-method", choices=["median", "biweight"], default="median"
+        "--detrend-method", choices=["median", "biweight", "spline"], default="spline"
     )
     ap.add_argument(
         "--per-duration",
@@ -224,7 +226,8 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     cfg = sr.SearchConfig(
-        detrend_method=args.detrend_method, detrend_per_duration=args.per_duration
+        detrend_method=args.detrend_method,
+        detrend_per_duration=args.per_duration,
     )
     cfg.validate()
     args.out.mkdir(parents=True, exist_ok=True)
