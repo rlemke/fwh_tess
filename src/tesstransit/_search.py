@@ -52,6 +52,22 @@ class SearchConfig:
     #     on our flux. Dense knots for an active star, sparse for a quiet one.
     detrend_method: str = "spline"
     spline_knot_days: tuple[float, ...] = (0.5, 0.75, 1.0, 1.5, 2.0, 3.0)
+    # Pre-whitening (spline only; 0 = off): before the spline, remove periodic
+    # stellar variability faster than prewhiten_max_period_days, which a 0.5 d
+    # knot spacing cannot follow -- about 10 of 31 planet misses over sectors
+    # 1-13 were stars varying in under a day (TOI 1066.01: 13,793 ppm, forced
+    # SNR 2.7 beside a 0.63 d variable). Up to prewhiten_max_terms Lomb-Scargle
+    # peaks, each fitted with prewhiten_harmonics harmonics and removed only if
+    # significant (false-alarm probability below prewhiten_fap) AND two-sided:
+    # a transit or eclipse only dims the star, so a fitted shape whose
+    # brightening is under prewhiten_min_symmetry of its dimming is left in --
+    # ultra-short-period planets and eclipsing binaries are what we search for.
+    prewhiten_max_period_days: float = 0.0
+    prewhiten_min_period_days: float = 0.05
+    prewhiten_max_terms: int = 3
+    prewhiten_harmonics: int = 3
+    prewhiten_fap: float = 1e-4
+    prewhiten_min_symmetry: float = 0.3
     detrend_per_duration: bool = False
     detrend_window_days: float = 1.0
     detrend_window_factor: float = 3.0
@@ -103,6 +119,14 @@ class SearchConfig:
         if self.detrend_per_duration and self.detrend_window_factor < 3:
             raise ValueError("detrend_window_factor under 3 would flatten the transits")
         longest = max(self.durations_hours) / 24.0
+        if self.prewhiten_max_period_days and self.detrend_method != "spline":
+            raise ValueError("pre-whitening is only implemented for spline detrending")
+        if self.prewhiten_max_period_days and not (
+            0 < self.prewhiten_min_period_days < self.prewhiten_max_period_days
+        ):
+            raise ValueError(
+                "need 0 < prewhiten_min_period_days < prewhiten_max_period_days"
+            )
         if self.detrend_method == "spline" and self.detrend_per_duration:
             raise ValueError("spline detrending has its own layers; no per_duration")
         if self.detrend_method == "spline":
@@ -182,8 +206,10 @@ class SearchResult:
     final_period_days: float | None = None
     final_epoch_btjd: float | None = None
     vetoes: list[Veto] = field(default_factory=list)
-    # Spline detrending only: the knot spacing BIC chose for each layer.
+    # Spline detrending only: the knot spacing BIC chose for each layer, and
+    # the fast periodicities pre-whitening divided out before it.
     knot_days: list[float] = field(default_factory=list)
+    prewhitened: list[Prewhitened] = field(default_factory=list)
 
 
 def running_median(
@@ -275,6 +301,104 @@ def spline_trend(
     return best[1], best[2]
 
 
+@dataclass
+class Prewhitened:
+    period_days: float
+    semi_amplitude_ppm: float  # half the peak-to-peak of the folded, binned data
+    symmetry: float  # brightening / dimming of the fitted shape (1 = sinusoid)
+
+
+def _harmonic_fit(
+    t: np.ndarray, r: np.ndarray, keep: np.ndarray, freq: float, n_harm: int
+) -> np.ndarray:
+    """Least-squares Fourier series at ``freq`` through ``keep`` points, at all ``t``."""
+    cols = [np.ones_like(t)]
+    for k in range(1, n_harm + 1):
+        w = 2 * np.pi * k * freq * t
+        cols += [np.cos(w), np.sin(w)]
+    a = np.column_stack(cols)
+    coef, *_ = np.linalg.lstsq(a[keep], r[keep], rcond=None)
+    return a @ coef - coef[0]
+
+
+def prewhiten(
+    time: np.ndarray, flux: np.ndarray, cfg: SearchConfig
+) -> tuple[np.ndarray, list[Prewhitened]]:
+    """``flux`` with significant, two-sided fast periodicities divided out."""
+    from astropy.timeseries import LombScargle
+
+    f = flux.copy()
+    removed: list[Prewhitened] = []
+    for _ in range(cfg.prewhiten_max_terms):
+        r = f / spline_trend(time, f, cfg.spline_knot_days)[0] - 1.0
+        ls = LombScargle(time, r)
+        freq, power = ls.autopower(
+            minimum_frequency=1.0 / cfg.prewhiten_max_period_days,
+            maximum_frequency=1.0 / cfg.prewhiten_min_period_days,
+            samples_per_peak=10,
+        )
+        i = int(np.argmax(power))
+        fap = float(
+            ls.false_alarm_probability(
+                power[i],
+                minimum_frequency=1.0 / cfg.prewhiten_max_period_days,
+                maximum_frequency=1.0 / cfg.prewhiten_min_period_days,
+                method="baluev",
+            )
+        )
+        if fap > cfg.prewhiten_fap:
+            break
+        # Two-sidedness is measured on the DATA folded at the period: the
+        # brightest and faintest of 50 phase bins against their median. A
+        # transit train dips without brightening; variability does both. (A
+        # 3-harmonic fitted shape rings: a pure 0.75 d, 1 h transit read as
+        # 0.43 two-sided and was removed -- measured, synthetic.)
+        period = 1.0 / float(freq[i])
+        if any(abs(period / p.period_days - 1) < 1e-3 for p in removed):
+            break  # the same peak again: nothing more this term can remove
+        phase = ((time - time[0]) / period) % 1.0
+        idx = np.minimum((phase * 50).astype(int), 49)
+        counts = np.bincount(idx, minlength=50)
+        binned = (
+            np.bincount(idx, weights=r, minlength=50)[counts > 0] / counts[counts > 0]
+        )
+        mid = float(np.median(binned))
+        up, down = float(binned.max()) - mid, mid - float(binned.min())
+        symmetry = up / down if down > 0 else 0.0
+        if (
+            min(symmetry, 1 / symmetry if symmetry else 0.0)
+            < cfg.prewhiten_min_symmetry
+        ):
+            break  # one-sided: transit- or eclipse-like, not stellar variability
+        # Subtract a fit without points far BELOW the rest, so a transit
+        # inside the variability does not pull the removed shape down.
+        sig = 1.4826 * np.median(np.abs(r - np.median(r)))
+        keep = r > np.median(r) - 3 * sig
+        model = _harmonic_fit(time, r, keep, float(freq[i]), cfg.prewhiten_harmonics)
+        f = f / (1.0 + model)
+        removed.append(
+            Prewhitened(1.0 / float(freq[i]), 0.5 * (up + down) * 1e6, symmetry)
+        )
+    return f, removed
+
+
+def flatten(
+    time: np.ndarray, flux: np.ndarray, cfg: SearchConfig
+) -> tuple[np.ndarray, float | None, list[Prewhitened]]:
+    """``(flat, knot spacing or None, removed periodicities)`` with ``cfg``'s method."""
+    if cfg.detrend_method != "spline":
+        return (
+            detrend(time, flux, cfg.detrend_window_days, cfg.detrend_method),
+            None,
+            [],
+        )
+    removed: list[Prewhitened] = []
+    if cfg.prewhiten_max_period_days > 0:
+        flux, removed = prewhiten(time, flux, cfg)
+    trend, knot = spline_trend(time, flux, cfg.spline_knot_days)
+    return flux / trend, knot, removed
+
+
 def detrend(
     time: np.ndarray,
     flux: np.ndarray,
@@ -309,6 +433,7 @@ class _Layer:
     valid: np.ndarray  # finite after flattening
     scatter: float
     window_days: float
+    prewhitened: list[Prewhitened] = field(default_factory=list)
 
 
 def _layers(time: np.ndarray, flux: np.ndarray, cfg: SearchConfig) -> list[_Layer]:
@@ -324,14 +449,14 @@ def _layers(time: np.ndarray, flux: np.ndarray, cfg: SearchConfig) -> list[_Laye
             for d in durations
         ]
     out = []
+    removed: list[Prewhitened] = []
     for window, durs in groups:
         if cfg.detrend_method == "spline":
-            trend, window = spline_trend(time, flux, cfg.spline_knot_days)
-            flat = flux / trend
+            flat, window, removed = flatten(time, flux, cfg)
         else:
             flat = detrend(time, flux, window, cfg.detrend_method)
         valid = np.isfinite(flat)
-        out.append(_Layer(durs, flat, valid, _mad_sigma(flat[valid]), window))
+        out.append(_Layer(durs, flat, valid, _mad_sigma(flat[valid]), window, removed))
     return out
 
 
@@ -509,6 +634,7 @@ def search(
         config=cfg.to_dict(),
         n_points=len(time),
         scatter_ppm=longest.scatter * 1e6,
+        prewhitened=list(longest.prewhitened),
         knot_days=[ly.window_days for ly in layers]
         if cfg.detrend_method == "spline"
         else [],

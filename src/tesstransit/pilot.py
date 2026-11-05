@@ -59,9 +59,7 @@ def forced_stats(
     erases shows up here as a low SNR: that separates "not in the data we
     search" from "in the data, and the search did not find it".
     """
-    f = sr.detrend(
-        time_, flux, cfg.detrend_window_days, cfg.detrend_method, cfg.spline_knot_days
-    )
+    f = sr.flatten(time_, flux, cfg)[0]
     ok = np.isfinite(f)
     t, f = time_[ok], f[ok]
     out: dict[str, dict[str, Any]] = {}
@@ -126,6 +124,7 @@ def _result_from_dict(d: dict[str, Any]) -> sr.SearchResult:
     d = dict(d)
     d["signals"] = [sr.Signal(**s) for s in d["signals"]]
     d["vetoes"] = [sr.Veto(**v) for v in d.get("vetoes", [])]
+    d["prewhitened"] = [sr.Prewhitened(**v) for v in d.get("prewhitened", [])]
     return sr.SearchResult(**d)
 
 
@@ -219,6 +218,11 @@ def main(argv: list[str] | None = None) -> int:
         "--detrend-method", choices=["median", "biweight", "spline"], default="spline"
     )
     ap.add_argument(
+        "--prewhiten",
+        action="store_true",
+        help="spline: first remove two-sided stellar periodicities faster than 1.5 d",
+    )
+    ap.add_argument(
         "--per-duration",
         action="store_true",
         help="one detrend window per trial duration",
@@ -228,6 +232,7 @@ def main(argv: list[str] | None = None) -> int:
     cfg = sr.SearchConfig(
         detrend_method=args.detrend_method,
         detrend_per_duration=args.per_duration,
+        prewhiten_max_period_days=1.5 if args.prewhiten else 0.0,
     )
     cfg.validate()
     args.out.mkdir(parents=True, exist_ok=True)

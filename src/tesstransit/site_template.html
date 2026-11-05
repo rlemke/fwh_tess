@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TESS sectors 1–2 re-search</title>
+<title>TESS transit re-search</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600&family=Source+Serif+4:opsz,wght@8..60,400&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
@@ -92,6 +92,8 @@
   .tx-tilenote { margin: calc(-1 * var(--cds-gap-sm)) 0 0; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); max-width: 78ch; }
   .tx-barlabel { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
   .tx-bar.tx-sectorbar { justify-content: flex-start; }
+  .tx-tile .rate { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); font-variant-numeric: tabular-nums; }
+  .tx-select { font: inherit; font-size: var(--cds-font-size-caption); padding: var(--cds-pad-xs) var(--cds-pad-sm); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); background: var(--color-panel); color: var(--color-fg); }
   .tx-tile .of { font-family: var(--font-anthropic-sans); font-size: var(--cds-font-size-body); color: var(--color-fg-muted); }
   .tx-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 30rem), 1fr)); gap: var(--cds-gap-md); }
   .tx-card { display: flex; flex-direction: column; gap: var(--cds-gap-sm); }
@@ -128,55 +130,67 @@
 
 <div class="tx">
   <header class="tx-head">
-    <h1 id="title">TESS re-search, sectors 1 and 2</h1>
-    <p>An independent box-least-squares search of TESS 2-minute light curves, compared with NASA's SPOC pipeline, in sectors 1 and 2. Of the planets and planet candidates SPOC detected in the same sector, it finds <b data-draw="hl" data-source="headline" data-field="recovered">—</b> of <b data-draw="hl" data-source="headline" data-field="total">—</b>, including <b data-draw="hl" data-source="headline" data-field="cpkp_recovered">—</b> of <b data-draw="hl" data-source="headline" data-field="cpkp_total">—</b> confirmed or known planets. Of all SPOC detections in its samples it finds only <b><span data-draw="hl" data-source="headline" data-field="percent">—</span>%</b>, because most of what it misses never became a planet candidate.</p>
+    <h1 id="title">TESS transit re-search</h1>
+    <p>An independent box-least-squares search of TESS 2-minute light curves, compared with NASA's SPOC pipeline, in sectors <b data-draw="pool" data-source="pooled" data-field="first_sector">—</b>–<b data-draw="pool" data-source="pooled" data-field="last_sector">—</b>. Of the planets and planet candidates SPOC detected in the same sector, it finds <b data-draw="pool" data-source="pooled" data-field="planets_found">—</b> of <b data-draw="pool" data-source="pooled" data-field="planets_total">—</b> (<b><span data-draw="pool" data-source="pooled" data-field="planets_pct">—</span>%</b>). Of all SPOC detections in its samples it finds only <b><span data-draw="pool" data-source="pooled" data-field="tces_pct">—</span>%</b>, because most of what it misses never became a planet candidate.</p>
   </header>
 
-  <section class="tx-tiles" aria-label="Headline figures by sector">
+  <section class="tx-tiles" aria-label="Headline figures, all sectors">
     <div class="tx-tile">
       <span class="lbl">Planets and candidates SPOC detected in the sector, found again</span>
-      <div class="tx-rows">
-        <div class="tx-row"><span class="sec">Sector 1</span><span class="num"><span data-draw="bs" data-source="by_sector" data-field="planets_found" data-where="sector=1">—</span> <span class="of">of <span data-draw="bs" data-source="by_sector" data-field="planets_total" data-where="sector=1">—</span></span></span></div>
-        <div class="tx-row"><span class="sec">Sector 2</span><span class="num"><span data-draw="bs" data-source="by_sector" data-field="planets_found" data-where="sector=2">—</span> <span class="of">of <span data-draw="bs" data-source="by_sector" data-field="planets_total" data-where="sector=2">—</span></span></span></div>
-      </div>
+      <span class="num"><span data-draw="pool" data-source="pooled" data-field="planets_found">—</span> <span class="of">of <span data-draw="pool" data-source="pooled" data-field="planets_total">—</span></span></span>
+      <span class="rate"><span data-draw="pool" data-source="pooled" data-field="planets_pct">—</span>% · 95% interval <span data-draw="pool" data-source="pooled" data-field="planets_lo">—</span>–<span data-draw="pool" data-source="pooled" data-field="planets_hi">—</span>%</span>
     </div>
     <div class="tx-tile">
       <span class="lbl">Confirmed or known planets among them, found again</span>
-      <div class="tx-rows">
-        <div class="tx-row"><span class="sec">Sector 1</span><span class="num"><span data-draw="bs" data-source="by_sector" data-field="confirmed_found" data-where="sector=1">—</span> <span class="of">of <span data-draw="bs" data-source="by_sector" data-field="confirmed_total" data-where="sector=1">—</span></span></span></div>
-        <div class="tx-row"><span class="sec">Sector 2</span><span class="num"><span data-draw="bs" data-source="by_sector" data-field="confirmed_found" data-where="sector=2">—</span> <span class="of">of <span data-draw="bs" data-source="by_sector" data-field="confirmed_total" data-where="sector=2">—</span></span></span></div>
-      </div>
+      <span class="num"><span data-draw="pool" data-source="pooled" data-field="confirmed_found">—</span> <span class="of">of <span data-draw="pool" data-source="pooled" data-field="confirmed_total">—</span></span></span>
+      <span class="rate"><span data-draw="pool" data-source="pooled" data-field="confirmed_pct">—</span>% · 95% interval <span data-draw="pool" data-source="pooled" data-field="confirmed_lo">—</span>–<span data-draw="pool" data-source="pooled" data-field="confirmed_hi">—</span>%</span>
     </div>
     <div class="tx-tile">
       <span class="lbl">Planets and candidates SPOC made no TCE for in the sector, found</span>
-      <div class="tx-rows">
-        <div class="tx-row"><span class="sec">Sector 1</span><span class="num"><span data-draw="bs" data-source="by_sector" data-field="notce_found" data-where="sector=1">—</span> <span class="of">of <span data-draw="bs" data-source="by_sector" data-field="notce_in_data" data-where="sector=1">—</span></span></span></div>
-        <div class="tx-row"><span class="sec">Sector 2</span><span class="num"><span data-draw="bs" data-source="by_sector" data-field="notce_found" data-where="sector=2">—</span> <span class="of">of <span data-draw="bs" data-source="by_sector" data-field="notce_in_data" data-where="sector=2">—</span></span></span></div>
-      </div>
+      <span class="num"><span data-draw="pool" data-source="pooled" data-field="notce_found">—</span> <span class="of">of <span data-draw="pool" data-source="pooled" data-field="notce_total">—</span></span></span>
+      <span class="rate"><span data-draw="pool" data-source="pooled" data-field="notce_pct">—</span>% · 95% interval <span data-draw="pool" data-source="pooled" data-field="notce_lo">—</span>–<span data-draw="pool" data-source="pooled" data-field="notce_hi">—</span>%</span>
     </div>
     <div class="tx-tile">
       <span class="lbl">SPOC detections in the search's period range, found again (TCE samples)</span>
-      <div class="tx-rows">
-        <div class="tx-row"><span class="sec">Sector 1</span><span class="num"><span data-draw="bs" data-source="by_sector" data-field="tces_found" data-where="sector=1">—</span> <span class="of">of <span data-draw="bs" data-source="by_sector" data-field="tces_in_range" data-where="sector=1">—</span></span></span></div>
-        <div class="tx-row"><span class="sec">Sector 2</span><span class="num"><span data-draw="bs" data-source="by_sector" data-field="tces_found" data-where="sector=2">—</span> <span class="of">of <span data-draw="bs" data-source="by_sector" data-field="tces_in_range" data-where="sector=2">—</span></span></span></div>
-      </div>
+      <span class="num"><span data-draw="pool" data-source="pooled" data-field="tces_found">—</span> <span class="of">of <span data-draw="pool" data-source="pooled" data-field="tces_total">—</span></span></span>
+      <span class="rate"><span data-draw="pool" data-source="pooled" data-field="tces_pct">—</span>% · 95% interval <span data-draw="pool" data-source="pooled" data-field="tces_lo">—</span>–<span data-draw="pool" data-source="pooled" data-field="tces_hi">—</span>%</span>
     </div>
     <div class="tx-tile">
       <span class="lbl">Stars with no SPOC detection where the search reports a signal</span>
-      <div class="tx-rows">
-        <div class="tx-row"><span class="sec">Sector 1</span><span class="num"><span data-draw="bs" data-source="by_sector" data-field="quiet_signal" data-where="sector=1">—</span> <span class="of">of <span data-draw="bs" data-source="by_sector" data-field="quiet_stars" data-where="sector=1">—</span></span></span></div>
-        <div class="tx-row"><span class="sec">Sector 2</span><span class="num"><span data-draw="bs" data-source="by_sector" data-field="quiet_signal" data-where="sector=2">—</span> <span class="of">of <span data-draw="bs" data-source="by_sector" data-field="quiet_stars" data-where="sector=2">—</span></span></span></div>
-      </div>
+      <span class="num"><span data-draw="pool" data-source="pooled" data-field="quiet_found">—</span> <span class="of">of <span data-draw="pool" data-source="pooled" data-field="quiet_total">—</span></span></span>
+      <span class="rate"><span data-draw="pool" data-source="pooled" data-field="quiet_pct">—</span>% · 95% interval <span data-draw="pool" data-source="pooled" data-field="quiet_lo">—</span>–<span data-draw="pool" data-source="pooled" data-field="quiet_hi">—</span>%</span>
     </div>
   </section>
-  <p class="tx-tilenote">"Made no TCE for" counts only candidates whose transit is strong enough in that one sector, measured at the known ephemeris on the search's own flux.</p>
+  <p class="tx-tilenote">All sectors pooled; one TOI counts once per sector it was observed in. "Made no TCE for" counts only candidates whose transit is strong enough in that one sector, measured at the known ephemeris on the search's own flux. Intervals are Wilson score intervals.</p>
+
+  <section class="tx-card" id="by-sector">
+    <h2>Results by sector</h2>
+    <p class="note">Each sector searched independently with the same settings. Sector 1 was used to tune the search; sectors 2 onward were run afterwards, unchanged.</p>
+    <div class="tx-wrap">
+      <table data-source="by_sector" data-row-key="sector">
+        <thead>
+          <tr>
+            <th class="n" data-field="sector">Sector</th>
+            <th class="n" data-field="planets_found">Planets found</th>
+            <th class="n" data-field="planets_total">Planets SPOC detected</th>
+            <th class="n" data-field="confirmed_found">Confirmed found</th>
+            <th class="n" data-field="confirmed_total">Confirmed</th>
+            <th class="n" data-field="notce_found">No-TCE candidates found</th>
+            <th class="n" data-field="notce_in_data">No-TCE candidates in data</th>
+            <th class="n" data-field="tces_found">TCEs found</th>
+            <th class="n" data-field="tces_in_range">TCEs in range</th>
+            <th class="n" data-field="quiet_signal">No-TCE stars with a signal</th>
+            <th class="n" data-field="quiet_stars">No-TCE stars</th>
+          </tr>
+        </thead>
+        <tbody data-draw="sector-body"></tbody>
+      </table>
+    </div>
+  </section>
 
   <div class="tx-bar tx-sectorbar">
-    <span class="tx-barlabel" id="sector-label">Charts and sky map show</span>
-    <div class="tx-toggle" role="group" aria-labelledby="sector-label">
-      <button type="button" data-sector="1" aria-pressed="true">Sector 1</button>
-      <button type="button" data-sector="2" aria-pressed="false">Sector 2</button>
-    </div>
+    <label class="tx-barlabel" id="sector-label" for="sector-select">Charts and sky map show sector</label>
+    <select class="tx-select" id="sector-select" aria-labelledby="sector-label" data-draw="sector-select" data-source="by_sector"></select>
   </div>
 
   <section class="tx-grid">
@@ -320,40 +334,20 @@
   const sync = () => {
     document.querySelectorAll('[data-pd]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.pd === S.pd)));
     document.querySelectorAll('[data-sky]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.sky === S.sky)));
-    document.querySelectorAll('[data-sector]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.sector === S.sector)));
     document.querySelectorAll('[data-legend]').forEach((l) => { l.hidden = l.dataset.legend !== S.sky; });
     document.querySelectorAll('.tx-sw[data-group]').forEach((s) => { s.style.background = groupColor(s.dataset.group); });
     document.querySelectorAll('.tx-sw[data-status]').forEach((s) => { s.style.background = statusColor(s.dataset.status); });
   };
   document.querySelectorAll('[data-pd]').forEach((b) => b.addEventListener('click', () => { S.pd = b.dataset.pd; sync(); dash.draw('pd'); }));
   document.querySelectorAll('[data-sky]').forEach((b) => b.addEventListener('click', () => { S.sky = b.dataset.sky; sync(); dash.draw('sky'); }));
-  document.querySelectorAll('[data-sector]').forEach((b) => b.addEventListener('click', () => { S.sector = b.dataset.sector; sync(); dash.draw('pd'); dash.draw('sky'); }));
   dash.onData(sync);
-
-  dash.calc('headline', {
-    inputs: ['tois', 'tce_sample'],
-    title: 'Planets found again, all sectors',
-    description: 'Planets and candidates (CP, KP, PC) SPOC detected in the same sector, and how many the search recovered; confirmed and known planets alone; and the share of all TCEs in the samples recovered.',
-    fn: (tois, tce_sample) => {
-      const planets = tois.filter((r) => r.planet_like === 'yes' && r.sector_tce === 'yes');
-      const confirmed = planets.filter((r) => r.disposition === 'CP' || r.disposition === 'KP');
-      const found = (rs) => rs.filter((r) => r.group === 'Recovered').length;
-      const tces = tce_sample.filter((r) => r.kind === 'TCE' && r.status !== 'Outside search');
-      const tfound = tces.filter((r) => r.status === 'Recovered').length;
-      return [{
-        recovered: found(planets), total: planets.length,
-        cpkp_recovered: found(confirmed), cpkp_total: confirmed.length,
-        percent: Math.round((100 * tfound) / tces.length),
-      }];
-    },
-  });
 
   dash.calc('by_sector', {
     inputs: ['tois', 'tce_sample'],
     title: 'Results by sector',
     description: 'For each sector: planets found again, confirmed planets, candidates with no sector TCE that are strong enough to find, TCE-sample recovery and no-TCE stars with a signal.',
     fn: (tois, tce_sample) => {
-      const sectors = [...new Set([...tois, ...tce_sample].map((r) => r.sector))].sort();
+      const sectors = [...new Set([...tois, ...tce_sample].map((r) => r.sector))].sort((x, y) => Number(x) - Number(y));
       const found = (rs) => rs.filter((r) => r.group === 'Recovered').length;
       return sectors.map((sector) => {
         const t = tois.filter((r) => r.sector === sector && r.planet_like === 'yes');
@@ -377,6 +371,35 @@
     },
   });
 
+  dash.calc('pooled', {
+    inputs: ['by_sector'],
+    title: 'All sectors pooled',
+    description: 'The per-sector counts summed over every sector, each as a rate with a Wilson 95% score interval.',
+    fn: (by_sector) => {
+      const wilson = (k, n) => {
+        const z = 1.96, p = k / n, d = 1 + (z * z) / n;
+        const c = (p + (z * z) / (2 * n)) / d;
+        const h = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / d;
+        return [c - h, c + h];
+      };
+      const sum = (f) => by_sector.reduce((a, r) => a + r[f], 0);
+      const pct = (x) => Math.round(1000 * x) / 10;
+      const out = {
+        first_sector: Math.min(...by_sector.map((r) => Number(r.sector))),
+        last_sector: Math.max(...by_sector.map((r) => Number(r.sector))),
+      };
+      for (const [k, found, total] of [
+        ['planets', 'planets_found', 'planets_total'], ['confirmed', 'confirmed_found', 'confirmed_total'],
+        ['notce', 'notce_found', 'notce_in_data'], ['tces', 'tces_found', 'tces_in_range'],
+        ['quiet', 'quiet_signal', 'quiet_stars'],
+      ]) {
+        const n = sum(total), f = sum(found), [lo, hi] = wilson(f, n);
+        Object.assign(out, { [`${k}_found`]: f, [`${k}_total`]: n, [`${k}_pct`]: pct(f / n), [`${k}_lo`]: pct(lo), [`${k}_hi`]: pct(hi) });
+      }
+      return [out];
+    },
+  });
+
   dash.calc('missed_planets', {
     inputs: ['tois'],
     title: 'Planets still missed',
@@ -386,15 +409,18 @@
       .map((r) => ({ sector: r.sector, toi: r.toi, disposition: r.disposition, period_days: r.period_days, depth_ppm: r.depth_ppm, forced_snr: r.forced_snr, outcome: r.outcome })),
   });
 
-  dash.draw('hl', (el) => {
-    const d = dash.data('headline');
-    el.textContent = d.status === 'ok' && d.data.length ? String(d.data[0][el.dataset.field]) : '—';
+  dash.draw('pool', (el) => {
+    const d = dash.data('pooled');
+    const v = d.status === 'ok' && d.data.length ? d.data[0][el.dataset.field] : null;
+    el.textContent = v === null ? '—' : /_(pct|lo|hi)$/.test(el.dataset.field) ? v.toFixed(1) : String(v);
   });
-  dash.draw('bs', (el) => {
+  dash.draw('sector-select', (sel) => {
     const d = dash.data('by_sector');
-    const sector = (el.dataset.where || '').split('=')[1];
-    const row = d.status === 'ok' ? d.data.find((r) => r.sector === sector) : null;
-    el.textContent = row ? String(row[el.dataset.field]) : '—';
+    const sectors = d.status === 'ok' ? d.data.map((r) => r.sector) : [];
+    if (sectors.length && !sectors.includes(S.sector)) S.sector = sectors[0];
+    sel.replaceChildren(...sectors.map((x) => new Option(x, x)));
+    sel.value = S.sector;
+    sel.onchange = () => { S.sector = sel.value; dash.draw('pd'); dash.draw('sky'); };
   });
 
   const body = (name, id, cols, numeric, sortKey, rowClass) => dash.draw(name, (tb) => {
@@ -419,6 +445,9 @@
     ['planets_recovered', 'planets_total', 'dev_tces_recovered', 'dev_tces_total', 'dev_quiet_with_signal', 'holdout_tces_recovered', 'holdout_tces_total', 'holdout_quiet_with_signal', 'seconds_per_star'],
     (a, b) => Number(a.order) - Number(b.order),
     (r) => (r.default === 'yes' ? 'is-default' : ''));
+  body('sector-body', 'by_sector',
+    ['sector', 'planets_found', 'planets_total', 'confirmed_found', 'confirmed_total', 'notce_found', 'notce_in_data', 'tces_found', 'tces_in_range', 'quiet_signal', 'quiet_stars'],
+    ['sector', 'planets_found', 'planets_total', 'confirmed_found', 'confirmed_total', 'notce_found', 'notce_in_data', 'tces_found', 'tces_in_range', 'quiet_signal', 'quiet_stars']);
   body('missed-body', 'missed_planets',
     ['sector', 'toi', 'disposition', 'period_days', 'depth_ppm', 'forced_snr', 'outcome'],
     ['period_days', 'depth_ppm', 'forced_snr'],

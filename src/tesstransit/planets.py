@@ -250,6 +250,11 @@ def main(argv: list[str] | None = None) -> int:
         "--detrend-method", choices=["median", "biweight", "spline"], default="spline"
     )
     ap.add_argument(
+        "--prewhiten",
+        action="store_true",
+        help="spline: first remove two-sided stellar periodicities faster than 1.5 d",
+    )
+    ap.add_argument(
         "--reuse",
         action="store_true",
         help="re-match the run's existing results.jsonl instead of searching again",
@@ -258,6 +263,7 @@ def main(argv: list[str] | None = None) -> int:
 
     cfg = sr.SearchConfig(
         detrend_method=args.detrend_method,
+        prewhiten_max_period_days=1.5 if args.prewhiten else 0.0,
     )
     cfg.validate()
     args.out.mkdir(parents=True, exist_ok=True)

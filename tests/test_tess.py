@@ -608,3 +608,45 @@ def test_tce_backing_pairs_each_toi_with_its_own_tce():
         [toi(2, 7.4507)], [mt.TCE("y", 7, 1, 3.72535, 1355.0, 1.0, 1.0, 9.0, 4)]
     )
     assert halved["175.02"].tce_id == "y"
+
+
+# --- pre-whitening fast stellar variability -----------------------------------
+
+PW = sr.SearchConfig(prewhiten_max_period_days=1.5)
+
+
+def test_prewhiten_removes_fast_variability_and_restores_the_transit():
+    from tesstransit import pilot
+
+    t, f = _sector(planets=[(4.6, 1327.8, 3.0, 3000.0)], noise_ppm=300.0)
+    f = f + 0.004 * np.sin(2 * np.pi * t / 0.63) + 0.0015 * np.sin(4 * np.pi * t / 0.63)
+    _, removed = sr.prewhiten(t, f, PW)
+    assert removed and abs(removed[0].period_days - 0.63) < 0.005
+    eph = [("p", 4.6, 1327.8, 3.0)]
+    plain = pilot.forced_stats(t, f, eph, sr.SearchConfig())["p"]["snr_red"]
+    white = pilot.forced_stats(t, f, eph, PW)["p"]["snr_red"]
+    assert white > 2 * plain and white > 15
+
+
+def test_prewhiten_leaves_an_ultra_short_period_planet_alone():
+    t, f = _sector(planets=[(0.75, 1325.6, 1.0, 2000.0)], noise_ppm=300.0)
+    _, removed = sr.prewhiten(t, f, PW)
+    assert removed == []  # one-sided: a transit only dims the star
+
+
+def test_prewhiten_leaves_a_quiet_star_alone_and_is_recorded():
+    t, f = _sector(noise_ppm=300.0)
+    assert sr.prewhiten(t, f, PW)[1] == []
+    tv, fv = _sector(planets=[(4.6, 1327.8, 3.0, 3000.0)], noise_ppm=300.0)
+    fv = fv + 0.004 * np.sin(2 * np.pi * tv / 0.63)
+    res = sr.search(
+        tv, fv, 42, 1, sr.SearchConfig(prewhiten_max_period_days=1.5, n_periods=5000)
+    )
+    assert res.prewhitened and abs(res.signals[0].period_days - 4.6) < 0.02
+
+
+def test_prewhiten_needs_the_spline():
+    with pytest.raises(ValueError, match="spline"):
+        sr.SearchConfig(
+            detrend_method="median", prewhiten_max_period_days=1.5
+        ).validate()
