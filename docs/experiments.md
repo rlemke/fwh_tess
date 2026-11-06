@@ -370,3 +370,12 @@ were gained, one a known planet. EB/V TOIs are unchanged (281 → 280).
 The planet gain is small next to the interval (+0.9 points, intervals
 overlap), but it is paired, same stars, and every gain and loss has a
 mechanism. A sign test on 8 gained vs 2 lost gives p ≈ 0.055 (one-sided).
+
+**Adopted as the default (2026-11-06).** `tesstransit.pilot` and
+`tesstransit.planets` now pre-whiten by default with the spline
+(`--no-prewhiten` turns it off; the median and biweight detrenders ignore
+it). `SearchConfig` itself still defaults to off, so library callers opt in
+with `prewhiten_max_period_days=1.5`. The published page and dashboard show
+the v2 runs, as scorecard variant 7c. Its sector-1 hold-out (seed 2, same
+stars as `holdout-spline7a`) found 30 of 86 TCEs against 7a's 35, and
+signals on 2 of 40 no-TCE stars against 5, the same trade as sectors 1-13.
