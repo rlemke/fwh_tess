@@ -271,11 +271,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="re-match the run's existing results.jsonl instead of searching again",
     )
+    ap.add_argument(
+        "--invert",
+        action="store_true",
+        help="false-alarm test: search 2 - flux, so every signal is a false alarm",
+    )
     args = ap.parse_args(argv)
 
     cfg = sr.SearchConfig(
         detrend_method=args.detrend_method,
         detrend_per_duration=args.per_duration,
+        invert_flux=args.invert,
         prewhiten_max_period_days=(
             1.5 if args.prewhiten and args.detrend_method == "spline" else 0.0
         ),

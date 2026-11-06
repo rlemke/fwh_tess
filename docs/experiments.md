@@ -396,3 +396,60 @@ same TOI catalogue copy as the published runs: 85 chunks, each searched once,
   sample rows, and the scorecard. Sector 1 matches the published development
   sample; the published page also shows a hold-out, which `BuildResults` does
   not run.
+
+## False-alarm rate from inverted light curves (2026-11-06)
+
+The thresholds (SDE 11, SNR 7.1) were set on synthetic white noise. To
+measure the false-alarm rate on real TESS noise, the 1,300 sample stars of
+sectors 1-13 (the same stars, seeds and pre-whitened search as `s{N}-pilot-pw2`)
+were searched again with the flux inverted (`2 - flux`, `pilot --invert`, Kepler
+DR25's test). A transit becomes a brightening that a dip search cannot find,
+so every inverted signal is a false alarm. 1,298 stars searched; ~1 min per
+sector of 100 stars.
+
+**No-TCE stars: 73 of 520 (14.0%, 11.3-17.3%) give an inverted signal; the
+normal search gives a signal on 70 of the same 520 (13.5%, 10.8-16.7%).** The
+rates are the same, so the no-TCE signals are, as a group, what false alarms
+alone produce. They also look alike: under 1 day for 87 of 122 inverted and
+98 of 118 normal signals, with many transits each. That is periodic stellar
+variability surviving pre-whitening, not white noise, which a threshold
+cannot separate from a transit.
+
+**Stars with a deep real signal are not neutral under inversion.** Inverted,
+75% of TCE stars give a signal. Of those, 81 match a TCE's ephemeris and all
+81 are TCEs that never became TOIs (variability SPOC flagged). Recovered
+planets show the mechanism: every one whose period reappears inverted is deep
+(4,000-37,000 ppm: TOI 418.01, 187.01, 507.01, 656.01, 781.01, 1084.01 ...),
+and the inverted signal sits at P, P/2 or P/3, wider and much shallower -- the
+flattening around the inverted transit, now a large bump, leaves dips beside
+it. Eclipsing binaries do the same. So the false-alarm rate is taken from the
+no-TCE stars only.
+
+**A stricter cut costs planets faster than it removes false alarms**
+(false alarms per no-TCE star, inverted | planets SPOC detected in the sector,
+found again; recovery at each cut from the matched signal and every signal
+ranked above it):
+
+| cut | false alarms | planets |
+|---|---|---|
+| SDE 11, SNR 7.1 (current) | 14.0% | 682 / 707 (96.5%) |
+| SDE 12 | 11.9% | 676 (95.6%) |
+| SDE 13 | 10.8% | 667 (94.3%) |
+| SDE 14 | 9.8% | 657 (92.9%) |
+| SDE 16 | 8.1% | 639 (90.4%) |
+| SDE 20 | 5.4% | 593 (83.9%) |
+| SDE 11, SNR 10 | 10.4% | 634 (89.7%) |
+
+The current cut is kept. Looser cuts cannot be scored from these runs (a
+signal the current cut rejected was never matched), but they only add false
+alarms: 16.0% at SDE 10, 21.5% at SDE 9.
+
+**A symmetry veto was tried and rejected.** Dropping a normal signal whose
+period (or 2x, 1/2, 3x, 1/3) also appears in the same star's inverted search
+would remove 46% of no-TCE signals, but also 10 of 57 recovered planet signals in the
+sample (18%), all deep hot Jupiters, for the reason above.
+
+**For a full-sector run** this means about 14% of the ~16,000 stars per sector
+-- some 2,200 -- will report a signal that is a false alarm. Those signals
+stay unvetted; separating them needs a shape test (odd/even depths, secondary
+eclipse, transit shape), not a stricter threshold.

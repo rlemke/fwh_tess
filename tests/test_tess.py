@@ -175,6 +175,19 @@ def test_search_recovers_injected_planet():
     assert res.config["n_periods"] == 5000
 
 
+def test_inverted_search_hides_a_transit_and_finds_a_brightening():
+    """The false-alarm test only works if inversion really flips the signal."""
+    inv = sr.SearchConfig(n_periods=5000, invert_flux=True)
+    t, f = _sector(planets=[(3.7, 1326.1, 3.0, 1500.0)])
+    res = sr.search(t, f, 42, 1, inv)
+    assert not any(abs(s.period_days - 3.7) < 0.05 for s in res.signals)
+    assert res.config["invert_flux"] is True
+    # A periodic BRIGHTENING is what inversion turns into a dip.
+    t, f = _sector(planets=[(3.7, 1326.1, 3.0, -1500.0)])
+    s = sr.search(t, f, 42, 1, inv).signals[0]
+    assert abs(s.period_days - 3.7) < 0.01
+
+
 def test_search_finds_second_planet_after_masking_first():
     t, f = _sector(planets=[(3.7, 1326.1, 3.0, 1500.0), (8.9, 1328.4, 4.0, 1200.0)])
     periods = sorted(s.period_days for s in sr.search(t, f, 42, 1, FAST).signals[:2])

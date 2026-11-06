@@ -121,6 +121,14 @@ class SearchConfig:
     # so calibrate on real non-TCE stars.
     sde_threshold: float = 11.0
     max_signals: int = 3
+    # False-alarm test (Kepler DR25's inverted light curves): search 2 - flux
+    # instead of flux. A transit becomes a brightening, which a dip search
+    # cannot find, so everything an inverted search reports is a false alarm
+    # from noise, systematics or variability -- measured on real light
+    # curves rather than synthetic noise. ⚠️ Not perfectly symmetric: a flare
+    # inverts into a dip that the normal search never sees, and pre-whitening's
+    # dip mask then protects what were brightenings.
+    invert_flux: bool = False
     mask_width_factor: float = 1.5  # mask this many durations around each transit
 
     def validate(self) -> None:
@@ -658,6 +666,8 @@ def search(
 
     cfg = config or SearchConfig()
     cfg.validate()
+    if cfg.invert_flux:
+        flux = 2.0 - np.asarray(flux)
     layers = _layers(time, flux, cfg)
     longest = layers[-1]  # the widest window: the closest to the raw light curve
     result = SearchResult(

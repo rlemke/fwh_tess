@@ -69,13 +69,17 @@ Every term, field and outcome — ours and SPOC's `tce_*` columns — is defined
 | `ffl/tess.ffl` | facets and workflows (`SectorRun`, `SearchSectors`, `BuildResults`); `ffl/tess_site.ffl` adds `PublishResults` (needs fwh_census_us) |
 | `domain.py` | the `facetwork.domains` entry point, kept apart so the search runs without Facetwork |
 
-## Thresholds are provisional
+## The false-alarm rate is measured
 
-On synthetic white noise the strongest BLS peak reached SNR 6.4–7.8, so an
-SNR cut at 7.1 alone accepts about half of noise-only stars. An SDE ≥ 7.0 gate
-separates them (noise 3.6–5.1, injected 300–1500 ppm transits 12.5–14.3). Real
-TESS noise is red, so both thresholds are to be calibrated on real stars that
-have no TCE.
+Searching the same light curves turned upside down (`pilot --invert`) turns
+every transit into a brightening, so whatever the inverted search still
+reports is a false alarm. Over the 520 no-TCE sample stars of sectors 1–13, at
+the current cut (SDE 11, SNR 7.1): **14.0% (11.3–17.3%) give a false alarm**.
+The normal search gives a signal on 13.5% of the same stars, so signals on
+stars without a TCE are, as a group, what false alarms alone produce. Most are
+periodic variability under a day that survives pre-whitening, not white
+noise, and a stricter cut costs planets faster than it removes them (SDE 14:
+9.8% false alarms, 92.9% of planets). Details: `docs/experiments.md`.
 
 ## Tests
 

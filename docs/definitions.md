@@ -62,8 +62,9 @@ the exact search that produced it.
 | `durations_hours` | 0.5, 1, 2, 3, 4, 6, 8 | Trial transit durations (box widths). |
 | `min_stellar_density_solar` | 0.1 | Caps the duration tried at each period at the longest a transit could physically last around a star at least this dense (circular orbit, central transit): **T_max ≈ 13 h × (P / 1 yr)^⅓ × (ρ / ρ☉)^−⅓**. At 0.1 ρ☉: 3.9 h at 1 d, 9.2 h at 13 d. Admits subgiants, excludes giants. |
 | `snr_threshold` | 7.1 | Minimum `snr` to report a signal. Numerically SPOC's MES threshold; **not the same statistic**. |
-| `sde_threshold` | 11.0 | Minimum `sde` to report a signal. ⚠️ Provisional (see §2.3). |
+| `sde_threshold` | 11.0 | Minimum `sde` to report a signal. Measured on real light curves (inverted search, sectors 1-13): 14.0% of no-TCE stars give a false alarm at this cut; see experiments.md, "False-alarm rate". |
 | `max_signals` | 3 | Stop after this many signals per star. |
+| `invert_flux` | false | Search `2 - flux`: a transit becomes a brightening, so every signal is a false alarm. For measuring the false-alarm rate (`pilot --invert`). ⚠️ Not neutral on stars with a deep signal: a hot Jupiter or eclipsing binary leaves inverted detections at P, P/2 or P/3. |
 | `min_snr_without_strongest` | 3.0 | Per-transit consistency veto: the events OTHER than the strongest must, on their own, show the dip at ≥ this SNR (red-noise uncertainties, §2.6). Catches one strong dip folded with noise into a "periodic" signal. |
 | `max_vetoes` | 5 | Stop after this many vetoed peaks per star (`max_vetoes`). |
 | `mask_width_factor` | 1.5 | After a signal is found, mask this many durations around each of its transits before searching again. |
