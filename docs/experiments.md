@@ -453,3 +453,62 @@ sample (18%), all deep hot Jupiters, for the reason above.
 -- some 2,200 -- will report a signal that is a false alarm. Those signals
 stay unvetted; separating them needs a shape test (odd/even depths, secondary
 eclipse, transit shape), not a stricter threshold.
+
+## Completeness from injected transits (2026-11-06)
+
+`python -m tesstransit.inject` puts ONE synthetic transit into the real
+PDCSAP flux of a star, before detrending, and searches it with the unchanged
+pipeline (pre-whitening on). The stars are the 520 no-TCE stars of the
+`s{N}-pilot-pw2` samples, 6 independent injections each: 3,120 searches, none
+failed, ~70 s per sector on 12 workers. Per injection: period log-uniform
+0.5-13 d (at least two transits on data), impact parameter 0-0.9, the duration
+a Sun-like star gives, a trapezoidal shape, and an **expected SNR**
+log-uniform 4-40 that sets the depth from the star's own scatter
+(`depth = snr * sigma / sqrt(n_in)`, `sigma` the MAD of the detrended,
+un-injected flux). Recovered = matched at the injected period and epoch, or
+an alias, with the TCE-matching tolerances (43 of 1,887 were aliases).
+
+**Recovery by expected SNR** (all stars | stars the normal search did NOT
+pre-whiten, 82% of injections):
+
+| expected SNR | all | without fast variability |
+|---|---|---|
+| 4-6 | 3.7% | 4.3% |
+| 6-7 | 18.4% | 22.1% |
+| 7-8 | 43.3% | 51.2% |
+| 8-10 | 56.0% | 68.8% |
+| 10-12 | 75.0% | 92.7% |
+| 12-15 | 76.8% | 91.3% |
+| 15-20 | 83.3% | 98.7% |
+| 20-40 | 90.1% | 98.8% |
+
+A logistic fit puts 50% at SNR 7.9 and 90% at 11.8 for ordinary stars (all
+stars: 9.6 and 21.2). The search's measured SNR on a recovered injection is
+0.95 of the expected (16-84%: 0.84-1.09), so the 7.1 threshold sits at an
+expected SNR of ~7.5, where the curve crosses 50%: on white-ish noise the
+pipeline loses almost nothing to detrending. Period, impact parameter, number
+of transits and duration barely matter above SNR 15 (84-92% in every bin; 2
+transits 84%, 20+ 90%).
+
+**The 10% loss at high SNR is the pulsating stars.** Of 92 injections missed
+at expected SNR >= 20, 83 are on the 93 stars (18%) whose normal search
+removed a periodicity; on every other star 9 of 775 are missed. Measured at
+the injected ephemeris with red-noise uncertainties, a sample of those misses
+has SNR 2-13 (median ~5) against an expected 20-40: the white-noise SNR
+overstates what can be detected on a pulsator, and the search stops on the
+star's own variability first (74 of 92 stop below threshold). In 6 of 25
+checked, the search had the right period at SNR > 7.1 but SDE 7-11: the
+pulsations widen the periodogram, so the SDE cut is what rejects them.
+
+**Pre-whitening helps on exactly those stars.** The same 558 injections on the
+93 pre-whitened stars, searched with it on and off: at expected SNR >= 20,
+48% found with it, 36% without. At SNR >= 15 it rescues 35 injections and
+loses 7 (3 of them where a removed period is a sub-harmonic of the injected
+one); where both find the transit the SNR is the same (median ratio 1.01).
+
+**So**: on the ~80% of stars without fast variability the search is complete
+to ~99% above expected SNR 15 and at the level its threshold promises. On
+pulsating stars completeness is about half even for strong transits, and a
+better treatment of their variability (a fuller pre-whitening, or a red-noise
+aware SDE) is the lever, not a lower threshold, which the false-alarm test
+shows is already spent on the same stars.

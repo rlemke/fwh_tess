@@ -62,6 +62,7 @@ Every term, field and outcome — ours and SPOC's `tce_*` columns — is defined
 | `_search.py` | spline detrend (knots by BIC, pre-whitening below 1.5 d) + iterative BLS, durations capped by period (Kepler's law); every parameter in `SearchConfig`, which travels with the result |
 | `_manifest.py` | which stars the sector observed, from the bucket itself |
 | `pilot.py` | `python -m tesstransit.pilot` — stratified sample → search → match |
+| `inject.py` | `python -m tesstransit.inject` — synthetic transits into the real light curves of a sample run's no-TCE stars → search → recovered or not |
 | `planets.py` | `python -m tesstransit.planets` — every TOI in the sector → search → match against the TOI, with each ephemeris forced on our flux |
 | `site.py` | `python -m tesstransit.site` — the stand-alone results page (per-sector figures, period–depth chart, sky map, experiments) from finished runs of any number of sectors; published at rlemke.github.io/facetwork-maps/space/tess-sector1/ |
 | `_match.py` | the TCE table and the matching rules: `recovered` / `recovered_alias` / `missed` (with a cause) / `unmatched` |
@@ -80,6 +81,24 @@ stars without a TCE are, as a group, what false alarms alone produce. Most are
 periodic variability under a day that survives pre-whitening, not white
 noise, and a stricter cut costs planets faster than it removes them (SDE 14:
 9.8% false alarms, 92.9% of planets). Details: `docs/experiments.md`.
+
+## Completeness is measured
+
+Synthetic transits injected into the real light curves of the same 520 no-TCE
+stars (`python -m tesstransit.inject`, 6 per star, 3,120 in all) and searched
+with the unchanged pipeline. Depth is set from an **expected SNR** (the
+white-noise SNR from the star's own scatter), drawn from 4 to 40.
+
+| | 50% found at | 90% found at | found, expected SNR ≥ 20 |
+|---|---|---|---|
+| all stars | SNR 9.6 | SNR 21.2 | 90.1% |
+| stars without fast variability (82%) | SNR 7.9 | SNR 11.8 | 98.8% |
+| pulsating stars, pre-whitened (18%) | — | — | 47.8% |
+
+On ordinary stars the search does what its SNR 7.1 threshold promises. On
+pulsating stars the residual red noise buries the transit, and pre-whitening
+is the reason it is not worse (on those stars it finds 48% of strong
+injections against 36% without it). Details: `docs/experiments.md`.
 
 ## Tests
 

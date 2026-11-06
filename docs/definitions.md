@@ -142,6 +142,17 @@ combined inverse-variance weighted into `snr_red`.
 
 ---
 
+### 2.7 Injection-recovery (`python -m tesstransit.inject`)
+
+| Term | Meaning |
+|---|---|
+| injection | ONE synthetic transit multiplied into a real light curve's PDCSAP flux before detrending; each light curve is searched with exactly one |
+| `snr_expected` | the white-noise SNR the injection would have: `depth * sqrt(n_in) / sigma`, `n_in` the cadences in the flat bottom. Drawn log-uniform 4-40; the depth follows from it. **Not** what the search measures on a star with red noise |
+| `sigma_ppm` | MAD scatter of the star's detrended flux BEFORE injection |
+| `duration_hours` | first to fourth contact for a circular orbit around a Sun-like star (`solar_duration_hours`) |
+| `depth_ppm` | flat-bottom depth of the trapezoid; ingress from the radius ratio and impact parameter |
+| `bucket` | `recovered` (a signal at the injected period and epoch), `recovered_alias` (2x, 1/2x, 3x, 1/3x with coincident transits), or `missed`; the tolerances are the TCE-matching ones (§3.1) |
+
 ## 3. The comparison
 
 ### 3.1 When a signal matches a TCE
