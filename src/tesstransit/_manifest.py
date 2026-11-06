@@ -60,15 +60,24 @@ def load_or_list(client: Any, sector: int, path: Path) -> dict[int, str]:
     """The manifest from ``path`` if present, else list the bucket and save it."""
     path = Path(path)
     if path.exists():
-        data = json.loads(path.read_text())
-        if data["sector"] != sector:
-            raise ValueError(
-                f"{path} is the manifest for sector {data['sector']}, not {sector}"
-            )
-        return {int(k): v for k, v in data["targets"].items()}
+        return parse(path.read_text(), sector, str(path))
     targets = list_sector(client, sector)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".part")
-    tmp.write_text(json.dumps({"sector": sector, "targets": targets}))
+    tmp.write_text(dumps(sector, targets))
     tmp.replace(path)
     return targets
+
+
+def dumps(sector: int, targets: dict[int, str]) -> str:
+    return json.dumps({"sector": sector, "targets": targets})
+
+
+def parse(text: str, sector: int, where: str = "manifest") -> dict[int, str]:
+    """``{tic_id: key}`` from a saved manifest; raise if it is another sector's."""
+    data = json.loads(text)
+    if data["sector"] != sector:
+        raise ValueError(
+            f"{where} is the manifest for sector {data['sector']}, not {sector}"
+        )
+    return {int(k): v for k, v in data["targets"].items()}

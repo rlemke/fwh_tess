@@ -1,0 +1,252 @@
+// TESS transit re-search: an independent BLS search of SPOC 2-minute light
+// curves, compared against SPOC's single-sector TCEs and the TOI catalogue.
+//
+// The steps are the command-line tools' own stages, so a workflow run and a
+// CLI run over the same inputs write the same files: choose the stars, search
+// them in chunks, then match the results against the TCEs and TOIs.
+//
+// ⚠️ SPOC searches with TPS (a wavelet matched filter); this searches with
+// BLS. Disagreement is expected from the method alone, and every comparison
+// says which side of that line a difference falls on.
+//
+// ⚠️ Two references, never merged: TCE recovery measures agreement with SPOC,
+// false alarms included; TOI recovery measures what bears on planets.
+
+namespace tess.source {
+
+    /** SPOC's single-sector DV TCE table, read from MAST.
+      *
+      * ⚠️ The file name carries a processing stamp that cannot be derived, so
+      * it is found in the directory listing; `url` says which one was used.
+      * Durations in this table are in HOURS. */
+    event facet TCETable(sector: Int, dest_dir: String) => (path: String, url: String, tces: Long)
+        with Effect(kind = "external") with Cost(tier = "free")
+
+    /** Every star the sector observed at 2-minute cadence, from what is in
+      * MAST's bucket rather than a target catalogue: only a light curve on
+      * disk proves a star was observed and processed. Listed once, then kept. */
+    event facet Targets(sector: Int, dest_dir: String) => (path: String, stars: Long)
+        with Effect(kind = "external") with Cost(tier = "free")
+}
+
+namespace tess {
+
+    /** Choose a sector's stars and cut them into search chunks.
+      *
+      * `kind = "planets"`: every TOI listing the sector, on a star it
+      * observed, each with its ephemeris to force on our flux. `kind =
+      * "sample"`: `n_tce` TCE stars and `n_quiet` stars without a TCE, drawn
+      * with `seed`, avoiding every star the `holdout_of` runs searched.
+      *
+      * ⚠️ One chunk is one step. A star takes ~5 s and a step costs ~2.6 s of
+      * overhead, so chunks of tens of stars, not one star per step. */
+    event facet Plan(
+        sector: Int,
+        kind: String,
+        work_dir: String,
+        targets_path: String,
+        tce_path: String,
+        toi_path: String,
+        label: String = "",
+        chunk_size: Int = 50,
+        n_tce: Int = 60,
+        n_quiet: Int = 40,
+        seed: Int = 1,
+        holdout_of: Json = []
+    ) => (chunks: Json, stars: Long, run_dir: String)
+        with Effect(kind = "io") with Cost(tier = "free")
+
+    /** Search one chunk: fetch each light curve, detrend (spline, with
+      * pre-whitening below 1.5 d unless switched off), run BLS, and measure
+      * any forced ephemerides on the same flattened flux.
+      *
+      * A star that fails is recorded with its error, never dropped, and
+      * counted in `failed`. Every attempt rewrites the chunk's results whole. */
+    event facet SearchChunk(chunk_path: String, prewhiten: Boolean = true, workers: Int = 4) => (
+        results_path: String, searched: Long, failed: Long
+    ) with Effect(kind = "external") with Cost(tier = "moderate") with Timeout(minutes = 60)
+
+    /** Gather a sector's chunks and match them against the TCEs and TOIs,
+      * writing the run directory (results.jsonl, matches.csv or tois.csv,
+      * summary.json).
+      *
+      * ⚠️ Refuses a star that appears in two chunks rather than counting it
+      * twice. `site_arg` is the run in the form BuildSite takes. */
+    event facet MatchSector(
+        sector: Int,
+        kind: String,
+        run_dir: String,
+        results_paths: Json,
+        targets_path: String,
+        tce_path: String,
+        toi_path: String,
+        prewhiten: Boolean = true,
+        n_tce: Int = 60,
+        n_quiet: Int = 40,
+        seed: Int = 1,
+        holdout_of: Json = [],
+        sample_label: String = "Sample"
+    ) => (run_dir: String, summary_path: String, stars: Long, failed: Long, found: Long, site_arg: String)
+        with Effect(kind = "io") with Cost(tier = "free")
+
+    /** The results page over finished runs: one self-contained HTML file.
+      *
+      * `planets` are "SECTOR=RUN_DIR", `samples` "SECTOR=LABEL=RUN_DIR" (each
+      * MatchSector's `site_arg`). `variants` are optional sector-1 scorecard
+      * rows, "name|detrending|planets-run|dev-run|holdout-run". */
+    event facet BuildSite(
+        planets: Json,
+        samples: Json,
+        lc_dir: String,
+        out_dir: String,
+        variants: Json = [],
+        default: String = ""
+    ) => (output_dir: String, page_path: String, bytes: Long)
+        with Effect(kind = "external") with Cost(tier = "free")
+}
+
+namespace tess.workflows {
+
+    /** Search every chunk of a plan, `width` at a time (0 = unbounded). */
+    facet SearchEach(chunks: Json, prewhiten: Boolean, workers: Int, width: Int) => (results: Json)
+        andThen foreach c in $.chunks limit $.width {
+            one = tess.SearchChunk(chunk_path = $.c, prewhiten = $.prewhiten, workers = $.workers)
+            yield SearchEach(results += one.results_path)
+        }
+
+    /** One sector, one kind: plan, search the chunks, match. */
+    workflow SectorRun(
+        sector: Int,
+        work_dir: String,
+        targets_path: String,
+        tce_path: String,
+        toi_path: String,
+        kind: String = "planets",
+        label: String = "",
+        chunk_size: Int = 50,
+        width: Int = 0,
+        workers: Int = 4,
+        prewhiten: Boolean = true,
+        n_tce: Int = 60,
+        n_quiet: Int = 40,
+        seed: Int = 1,
+        holdout_of: Json = [],
+        sample_label: String = "Sample"
+    ) => (run_dir: String, stars: Long, failed: Long, found: Long, site_arg: String) andThen {
+        plan = tess.Plan(
+            sector = $.sector, kind = $.kind, work_dir = $.work_dir, label = $.label,
+            targets_path = $.targets_path, tce_path = $.tce_path, toi_path = $.toi_path,
+            chunk_size = $.chunk_size, n_tce = $.n_tce, n_quiet = $.n_quiet,
+            seed = $.seed, holdout_of = $.holdout_of
+        )
+        searched = SearchEach(
+            chunks = plan.chunks, prewhiten = $.prewhiten, workers = $.workers, width = $.width
+        )
+        matched = tess.MatchSector(
+            sector = $.sector, kind = $.kind, run_dir = plan.run_dir,
+            results_paths = searched.results, targets_path = $.targets_path,
+            tce_path = $.tce_path, toi_path = $.toi_path, prewhiten = $.prewhiten,
+            n_tce = $.n_tce, n_quiet = $.n_quiet, seed = $.seed,
+            holdout_of = $.holdout_of, sample_label = $.sample_label
+        )
+        yield SectorRun(
+            run_dir = matched.run_dir, stars = matched.stars, failed = matched.failed,
+            found = matched.found, site_arg = matched.site_arg
+        )
+    }
+
+    /** For each sector: its TCE table and star list, then the planet sample
+      * and the TCE/no-TCE sample. */
+    facet SectorEach(
+        sectors: Json,
+        work_dir: String,
+        toi_path: String,
+        sector_width: Int,
+        chunk_size: Int,
+        width: Int,
+        workers: Int,
+        prewhiten: Boolean,
+        n_tce: Int,
+        n_quiet: Int,
+        seed: Int
+    ) => (planets: Json, samples: Json, failed: Json)
+        andThen foreach s in $.sectors limit $.sector_width {
+            tce = tess.source.TCETable(sector = $.s, dest_dir = $.work_dir)
+            targets = tess.source.Targets(sector = $.s, dest_dir = $.work_dir ++ "/lc")
+            p = SectorRun(
+                sector = $.s, kind = "planets", work_dir = $.work_dir,
+                targets_path = targets.path, tce_path = tce.path, toi_path = $.toi_path,
+                chunk_size = $.chunk_size, width = $.width, workers = $.workers,
+                prewhiten = $.prewhiten
+            )
+            q = SectorRun(
+                sector = $.s, kind = "sample", work_dir = $.work_dir,
+                targets_path = targets.path, tce_path = tce.path, toi_path = $.toi_path,
+                chunk_size = $.chunk_size, width = $.width, workers = $.workers,
+                prewhiten = $.prewhiten, n_tce = $.n_tce, n_quiet = $.n_quiet, seed = $.seed
+            )
+            yield SectorEach(planets += p.site_arg, samples += q.site_arg, failed += p.failed)
+        }
+
+    /** Sectors end to end, against today's TOI catalogue.
+      *
+      * ⚠️ The TOI catalogue moves (new TOIs, changed dispositions), so a
+      * re-run is against the catalogue of its day; `toi_sha256` records which
+      * one. `sector_width` bounds how many sectors run at once. */
+    workflow SearchSectors(
+        sectors: Json,
+        work_dir: String,
+        toi_url: String = "https://archive.stsci.edu/missions/tess/catalogs/toi/tois.csv",
+        toi_max_age_hours: Double = 24.0,
+        sector_width: Int = 2,
+        chunk_size: Int = 50,
+        width: Int = 0,
+        workers: Int = 4,
+        prewhiten: Boolean = true,
+        n_tce: Int = 60,
+        n_quiet: Int = 40,
+        seed: Int = 1
+    ) => (planets: Json, samples: Json, failed: Json, toi_sha256: String) andThen {
+        tois = fw.http.Fetch(
+            url = $.toi_url,
+            dest = $.work_dir ++ "/tois.csv",
+            max_age_hours = $.toi_max_age_hours
+        )
+        each = SectorEach(
+            sectors = $.sectors, work_dir = $.work_dir, toi_path = tois.path,
+            sector_width = $.sector_width, chunk_size = $.chunk_size, width = $.width,
+            workers = $.workers, prewhiten = $.prewhiten, n_tce = $.n_tce,
+            n_quiet = $.n_quiet, seed = $.seed
+        )
+        yield SearchSectors(
+            planets = each.planets, samples = each.samples, failed = each.failed,
+            toi_sha256 = tois.sha256
+        )
+    }
+
+    /** Search the sectors and build the results page (no publishing). */
+    workflow BuildResults(
+        sectors: Json,
+        work_dir: String,
+        sector_width: Int = 2,
+        chunk_size: Int = 50,
+        width: Int = 0,
+        workers: Int = 4,
+        prewhiten: Boolean = true,
+        variants: Json = [],
+        default: String = ""
+    ) => (page_path: String, output_dir: String, toi_sha256: String) andThen {
+        runs = SearchSectors(
+            sectors = $.sectors, work_dir = $.work_dir, sector_width = $.sector_width,
+            chunk_size = $.chunk_size, width = $.width, workers = $.workers,
+            prewhiten = $.prewhiten
+        )
+        site = tess.BuildSite(
+            planets = runs.planets, samples = runs.samples, variants = $.variants,
+            default = $.default, lc_dir = $.work_dir ++ "/lc", out_dir = $.work_dir ++ "/site"
+        )
+        yield BuildResults(
+            page_path = site.page_path, output_dir = site.output_dir, toi_sha256 = runs.toi_sha256
+        )
+    }
+}

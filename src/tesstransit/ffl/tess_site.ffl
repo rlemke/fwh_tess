@@ -1,0 +1,55 @@
+// Publishing the TESS results page to GitHub Pages.
+//
+// Kept apart from tess.ffl because it composes another domain's facet
+// (census.Publish.PublishWebBundle, the shared, token-gated Pages publisher),
+// so compiling it needs that domain's FFL as a library:
+//
+//   fw ffl run --primary tess_site.ffl --library tess.ffl \
+//       --library <fwh_census_us>/src/census_us/handlers/publish/ffl/census_publish.ffl \
+//       --library <fwh_census_us>/src/census_us/handlers/downloads/ffl/census_operations.ffl \
+//       --library facetwork/ffl/http.ffl --workflow tess.publish.PublishResults
+//
+// The page lands under `dest`. The publisher replaces only that subtree and
+// merges the gallery landing, so other bundles are untouched.
+
+namespace tess.publish {
+    use census.Publish
+
+    /** Search the sectors, build the page, publish it.
+      *
+      * ⚠️ `dest` defaults to "space/tess-sector1", where the page has been
+      * since it covered one sector; existing links point there. */
+    workflow PublishResults(
+        sectors: Json,
+        work_dir: String,
+        repo: String = "rlemke/facetwork-maps",
+        dest: String = "space/tess-sector1",
+        label: String = "TESS transit re-search",
+        sector_width: Int = 2,
+        chunk_size: Int = 50,
+        width: Int = 0,
+        workers: Int = 4,
+        prewhiten: Boolean = true,
+        variants: Json = [],
+        default: String = ""
+    ) => (pages_url: String, files: Long, commit: String, toi_sha256: String) andThen {
+        built = tess.workflows.BuildResults(
+            sectors = $.sectors, work_dir = $.work_dir, sector_width = $.sector_width,
+            chunk_size = $.chunk_size, width = $.width, workers = $.workers,
+            prewhiten = $.prewhiten, variants = $.variants, default = $.default
+        )
+        published = PublishWebBundle(
+            repo = $.repo,
+            prefixes = [built.output_dir],
+            dests = [$.dest],
+            include = [".html"],
+            labels = [$.label]
+        )
+        yield PublishResults(
+            pages_url = published.pages_url,
+            files = published.file_count,
+            commit = published.commit,
+            toi_sha256 = built.toi_sha256
+        )
+    }
+}

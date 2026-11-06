@@ -14,5 +14,5 @@ two disagree, why?
 package searches with BLS. Disagreement is expected from the method alone, so
 every comparison must say which side of that line a difference falls on.
 
-Not yet a Facetwork domain: the entry point is added with the FFL.
+The Facetwork domain (handlers + FFL) is in :mod:`.handlers` and :mod:`.domain`.
 """

@@ -216,14 +216,18 @@ def _split(values: list[str], parts: int, flag: str) -> list[list[str]]:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--runs", type=Path, required=True)
+    ap.add_argument(
+        "--runs", type=Path, default=Path("."), help="base for relative run names"
+    )
     ap.add_argument(
         "--workdir", type=Path, required=True, help="manifests + coords caches"
     )
     ap.add_argument("--planets", action="append", required=True, help="SECTOR=RUN")
     ap.add_argument("--sample", action="append", required=True, help="SECTOR=LABEL=RUN")
-    ap.add_argument("--variant", action="append", default=[], required=True)
-    ap.add_argument("--default", required=True)
+    ap.add_argument(
+        "--variant", action="append", default=[], help="sector-1 scorecard row"
+    )
+    ap.add_argument("--default", default="")
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args(argv)
 

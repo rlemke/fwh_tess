@@ -203,6 +203,46 @@ def classify(
     return "missed:not_detected"
 
 
+@dataclass
+class Selection:
+    """The planet sample of one sector, and what each TOI is matched against."""
+
+    all_tois: list[TOI]  # every TOI listing the sector
+    catalogue: dict[str, TOI]  # by TOI name, catalogue ephemeris
+    backing: dict[str, mt.TCE | None]  # the sector TCE behind each TOI
+    by_star: dict[int, list[TOI]]  # observed stars -> TOIs, in-sector ephemeris
+
+
+def select(
+    sector: int, targets: dict[int, str], tces: list[mt.TCE], toi_text: str
+) -> Selection:
+    """Every TOI listing ``sector`` on a star the sector observed at 2 minutes."""
+    tces_by: dict[int, list[mt.TCE]] = {}
+    for t in tces:
+        tces_by.setdefault(t.tic_id, []).append(t)
+    all_tois = [t for t in parse_tois(toi_text) if sector in t.sectors]
+    tois_by: dict[int, list[TOI]] = {}
+    for t in all_tois:
+        tois_by.setdefault(t.tic_id, []).append(t)
+    backing: dict[str, mt.TCE | None] = {}
+    for tic, ts in tois_by.items():
+        backing.update(tce_backing(ts, tces_by.get(tic, [])))
+    by_star: dict[int, list[TOI]] = {}
+    for t in all_tois:
+        if t.tic_id in targets:
+            by_star.setdefault(t.tic_id, []).append(local_ephemeris(t, backing[t.toi]))
+    return Selection(all_tois, {t.toi: t for t in all_tois}, backing, by_star)
+
+
+def forced_ephemerides(ts: list[TOI]) -> list[tuple[str, float, float, float]]:
+    """``(name, period, epoch, duration_h)`` for each TOI with a period."""
+    return [
+        (t.toi, t.period_days, t.epoch_btjd, t.duration_hours)
+        for t in ts
+        if t.period_days
+    ]
+
+
 def _search_all(
     args: argparse.Namespace,
     cfg: sr.SearchConfig,
@@ -222,11 +262,7 @@ def _search_all(
                 str(args.workdir),
                 args.keep_lc,
                 cfg,
-                [
-                    (t.toi, t.period_days, t.epoch_btjd, t.duration_hours)
-                    for t in ts
-                    if t.period_days
-                ],
+                forced_ephemerides(ts),
             )
             for tic, ts in sorted(by_star.items())
         ]
@@ -275,24 +311,16 @@ def main(argv: list[str] | None = None) -> int:
     targets = mf.load_or_list(
         client, args.sector, args.workdir / f"manifest-s{args.sector:04d}.json"
     )
-    tces = mt.parse_tce_csv(args.tce_csv.read_text())
-    tces_by: dict[int, list[mt.TCE]] = {}
-    for t in tces:
-        tces_by.setdefault(t.tic_id, []).append(t)
-    all_tois = [
-        t for t in parse_tois(args.toi_csv.read_text()) if args.sector in t.sectors
-    ]
-    catalogue = {t.toi: t for t in all_tois}
-    tois_by: dict[int, list[TOI]] = {}
-    for t in all_tois:
-        tois_by.setdefault(t.tic_id, []).append(t)
-    backing: dict[str, mt.TCE | None] = {}
-    for tic, ts in tois_by.items():
-        backing.update(tce_backing(ts, tces_by.get(tic, [])))
-    tois = [local_ephemeris(t, backing[t.toi]) for t in all_tois if t.tic_id in targets]
-    by_star: dict[int, list[TOI]] = {}
-    for t in tois:
-        by_star.setdefault(t.tic_id, []).append(t)
+    sel = select(
+        args.sector,
+        targets,
+        mt.parse_tce_csv(args.tce_csv.read_text()),
+        args.toi_csv.read_text(),
+    )
+    all_tois, catalogue, backing, by_star = (
+        sel.all_tois, sel.catalogue, sel.backing, sel.by_star
+    )  # fmt: skip
+    tois = [t for ts in by_star.values() for t in ts]
     print(
         f"{len(all_tois)} TOIs list sector {args.sector}; {len(tois)} on {len(by_star)} "
         f"stars with a 2-min light curve",

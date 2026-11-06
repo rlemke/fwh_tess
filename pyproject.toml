@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "An independent transit re-search of TESS 2-minute light curves, compared against SPOC's single-sector TCEs"
 requires-python = ">=3.11"
 dependencies = [
+    "facetwork>=0.31.0",
     "numpy>=1.26",
     "astropy>=6.0",      # FITS reader + BoxLeastSquares
     "boto3>=1.28",       # anonymous reads of MAST's public S3 copy of TESS
@@ -18,8 +19,11 @@ dependencies = [
 wotan = ["wotan>=1.10"]   # biweight detrending (pulls numba)
 dev = ["pytest>=7.0", "ruff>=0.8.0", "wotan>=1.10"]
 
+[project.entry-points."facetwork.domains"]
+tess = "tesstransit.domain:domain"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-tesstransit = ["site_template.html"]
+tesstransit = ["site_template.html", "ffl/*.ffl"]

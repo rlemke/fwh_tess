@@ -195,6 +195,43 @@ def _toi_for(tic: int, period: float | None, tois: dict[int, list[dict[str, Any]
     return None
 
 
+def stars_of(runs: list[Path]) -> frozenset[int]:
+    """Every star an earlier run searched, so a hold-out can avoid them."""
+    return frozenset(
+        json.loads(line)["tic_id"]
+        for run in runs
+        for line in (run / "results.jsonl").read_text().splitlines()
+    )
+
+
+def _search_sample(
+    args: argparse.Namespace,
+    cfg: sr.SearchConfig,
+    targets: dict[int, str],
+    sample: list[int],
+) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    t1 = time.time()
+    with ProcessPoolExecutor(max_workers=args.workers) as pool:
+        futs = [
+            pool.submit(
+                _search_one,
+                tic,
+                args.sector,
+                targets[tic],
+                str(args.workdir),
+                args.keep_lc,
+                cfg,
+            )
+            for tic in sample
+        ]
+        for i, fut in enumerate(as_completed(futs), 1):
+            records.append(fut.result())
+            if i % 10 == 0:
+                print(f"  {i}/{len(sample)} ({time.time() - t1:.0f}s)", file=sys.stderr)
+    return records
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--sector", type=int, required=True)
@@ -229,6 +266,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="one detrend window per trial duration",
     )
+    ap.add_argument(
+        "--reuse",
+        action="store_true",
+        help="re-match the run's existing results.jsonl instead of searching again",
+    )
     args = ap.parse_args(argv)
 
     cfg = sr.SearchConfig(
@@ -249,11 +291,7 @@ def main(argv: list[str] | None = None) -> int:
         f"manifest: {len(targets)} targets ({time.time() - t0:.0f}s)", file=sys.stderr
     )
     tces = mt.parse_tce_csv(args.tce_csv.read_text())
-    exclude = frozenset(
-        json.loads(line)["tic_id"]
-        for run in args.holdout_of
-        for line in (run / "results.jsonl").read_text().splitlines()
-    )
+    exclude = stars_of(args.holdout_of)
     tce_stars, quiet, unobserved = select_sample(
         tces, targets, args.n_tce, args.n_quiet, args.seed, exclude
     )
@@ -266,28 +304,25 @@ def main(argv: list[str] | None = None) -> int:
     sample = tce_stars + quiet
     records: list[dict[str, Any]] = []
     t1 = time.time()
-    with ProcessPoolExecutor(max_workers=args.workers) as pool:
-        futs = [
-            pool.submit(
-                _search_one,
-                tic,
-                args.sector,
-                targets[tic],
-                str(args.workdir),
-                args.keep_lc,
-                cfg,
-            )
-            for tic in sample
+    if args.reuse:
+        records = [
+            json.loads(ln)
+            for ln in (args.out / "results.jsonl").read_text().splitlines()
         ]
-        for i, fut in enumerate(as_completed(futs), 1):
-            records.append(fut.result())
-            if i % 10 == 0:
-                print(f"  {i}/{len(sample)} ({time.time() - t1:.0f}s)", file=sys.stderr)
+        missing = set(sample) - {r["tic_id"] for r in records}
+        if missing:
+            raise SystemExit(
+                f"--reuse: {len(missing)} sample stars not in results.jsonl"
+            )
+        records = [r for r in records if r["tic_id"] in set(sample)]
+    else:
+        records = _search_sample(args, cfg, targets, sample)
     wall = time.time() - t1
     records.sort(key=lambda r: r["tic_id"])
-    with (args.out / "results.jsonl").open("w") as fh:
-        for r in records:
-            fh.write(json.dumps(r) + "\n")
+    if not args.reuse:
+        with (args.out / "results.jsonl").open("w") as fh:
+            for r in records:
+                fh.write(json.dumps(r) + "\n")
 
     results = {r["tic_id"]: _result_from_dict(r["result"]) for r in records if r["ok"]}
     failed = {r["tic_id"]: r["error"] for r in records if not r["ok"]}
@@ -343,10 +378,12 @@ def main(argv: list[str] | None = None) -> int:
         },
         "search_config": cfg.to_dict(),
         "match_config": asdict(mt.MatchConfig()),
+        # Per-star times are recorded with each result, so they survive
+        # --reuse; the wall time does not -- a re-match did no searching.
         "seconds": {
-            "wall": wall,
+            "wall": None if args.reuse else wall,
             "per_star_median": float(np.median(totals)) if totals else None,
-            "workers": args.workers,
+            "workers": None if args.reuse else args.workers,
         },
     }
     (args.out / "summary.json").write_text(json.dumps(summary, indent=2))

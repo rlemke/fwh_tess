@@ -13,8 +13,33 @@ alone. Signals with no TCE are **unvetted** and are never reported as planets.
 
 ## Status
 
-Phase 0 (core + offline tests). Not yet a Facetwork domain: no FFL or
-handlers yet.
+Sectors 1–13 searched. Of the planets and candidates SPOC detected in the same
+sector, **682 of 707 (96.5%)** are found again. Results page:
+<https://rlemke.github.io/facetwork-maps/space/tess-sector1/>.
+
+A Facetwork domain (`tess`): the command-line tools and the FFL workflows run
+the same code, so either way gives the same files.
+
+## FFL at a glance
+
+```ffl
+namespace demo {
+    workflow OneSector(work_dir: String = "/data/tess") => (found: Long, run_dir: String) andThen {
+        tois    = fw.http.Fetch(url = "https://archive.stsci.edu/missions/tess/catalogs/toi/tois.csv",
+                                dest = $.work_dir ++ "/tois.csv", max_age_hours = 24.0)
+        tces    = tess.source.TCETable(sector = 1, dest_dir = $.work_dir)
+        stars   = tess.source.Targets(sector = 1, dest_dir = $.work_dir ++ "/lc")
+        planets = tess.workflows.SectorRun(sector = 1, work_dir = $.work_dir,
+                                           targets_path = stars.path, tce_path = tces.path,
+                                           toi_path = tois.path)
+        yield OneSector(found = planets.found, run_dir = planets.run_dir)
+    }
+}
+```
+
+Every sector end to end: `tess.workflows.SearchSectors` (runs) or
+`tess.workflows.BuildResults` (runs + page); `tess.publish.PublishResults` also
+publishes. Full gallery: [`docs/ffl-examples.md`](docs/ffl-examples.md).
 
 ## Data (measured 2026-11-04)
 
@@ -34,12 +59,15 @@ Every term, field and outcome — ours and SPOC's `tce_*` columns — is defined
 | Module | |
 |---|---|
 | `_lightcurve.py` | locate / fetch / load one light curve; the quality mask is counted, not hidden |
-| `_search.py` | running-median detrend + iterative BLS, durations capped by period (Kepler's law); every parameter in `SearchConfig`, which travels with the result |
+| `_search.py` | spline detrend (knots by BIC, pre-whitening below 1.5 d) + iterative BLS, durations capped by period (Kepler's law); every parameter in `SearchConfig`, which travels with the result |
 | `_manifest.py` | which stars the sector observed, from the bucket itself |
 | `pilot.py` | `python -m tesstransit.pilot` — stratified sample → search → match |
 | `planets.py` | `python -m tesstransit.planets` — every TOI in the sector → search → match against the TOI, with each ephemeris forced on our flux |
 | `site.py` | `python -m tesstransit.site` — the stand-alone results page (per-sector figures, period–depth chart, sky map, experiments) from finished runs of any number of sectors; published at rlemke.github.io/facetwork-maps/space/tess-sector1/ |
 | `_match.py` | the TCE table and the matching rules: `recovered` / `recovered_alias` / `missed` (with a cause) / `unmatched` |
+| `handlers.py` | the Facetwork steps: `TCETable`, `Targets`, `Plan`, `SearchChunk`, `MatchSector`, `BuildSite` — each a thin layer over the modules above |
+| `ffl/tess.ffl` | facets and workflows (`SectorRun`, `SearchSectors`, `BuildResults`); `ffl/tess_site.ffl` adds `PublishResults` (needs fwh_census_us) |
+| `domain.py` | the `facetwork.domains` entry point, kept apart so the search runs without Facetwork |
 
 ## Thresholds are provisional
 
