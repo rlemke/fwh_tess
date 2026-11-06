@@ -148,11 +148,11 @@ def load_lc(
     keep = ~flagged & finite
     if not keep.any():
         raise ValueError(
-            f"{path}: no usable cadences ({n} rows, {flagged.sum()} flagged)"
+            f"{Path(path).name}: no usable cadences ({n} rows, {flagged.sum()} flagged)"
         )
     med = np.median(flux[keep])
     if not med > 0:
-        raise ValueError(f"{path}: median PDCSAP flux {med} is not positive")
+        raise ValueError(f"{Path(path).name}: median PDCSAP flux {med} is not positive")
     return LightCurve(
         tic_id=tic_id,
         sector=sector,

@@ -167,15 +167,25 @@ def test_every_ffl_block_in_the_docs_compiles(tmp_path):
 
     root = Path(__file__).resolve().parents[1]
     lib = Path(facetwork.__file__).parent / "ffl"
-    text = (root / "README.md").read_text() + (root / "docs" / "ffl-examples.md").read_text()
-    blocks = re.findall(r"```ffl\n(.*?)```", text, re.S)
+    text = (root / "README.md").read_text() + (
+        root / "docs" / "ffl-examples.md"
+    ).read_text()
+    blocks = re.findall(r"```ffl\n(.*?)```", text, re.DOTALL)
     assert len(blocks) >= 7
     for i, block in enumerate(blocks):
         src = tmp_path / f"b{i}.ffl"
         src.write_text(block)
-        argv = [sys.executable, "-m", "facetwork.cli", "compile", "--check", "--primary", str(src)]
+        argv = [
+            sys.executable,
+            "-m",
+            "facetwork.cli",
+            "compile",
+            "--check",
+            "--primary",
+            str(src),
+        ]
         for library in (root / "src/tesstransit/ffl/tess.ffl", lib / "http.ffl",
                         lib / "compare.ffl", lib / "provenance.ffl"):  # fmt: skip
             argv += ["--library", str(library)]
-        done = subprocess.run(argv, capture_output=True, text=True)
+        done = subprocess.run(argv, capture_output=True, text=True, check=False)
         assert done.returncode == 0, f"block {i}:\n{block}\n{done.stderr}{done.stdout}"

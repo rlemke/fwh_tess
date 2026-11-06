@@ -379,3 +379,20 @@ with `prewhiten_max_period_days=1.5`. The published page and dashboard show
 the v2 runs, as scorecard variant 7c. Its sector-1 hold-out (seed 2, same
 stars as `holdout-spline7a`) found 30 of 86 TCEs against 7a's 35, and
 signals on 2 of 40 no-TCE stars against 5, the same trade as sectors 1-13.
+
+## FFL workflow reproduces the CLI runs (2026-11-06)
+
+`tess.workflows.BuildResults` over sectors 1-13, run in memory with the real
+handlers and the real search (8 workers per chunk, chunks of 50), against the
+same TOI catalogue copy as the published runs: 85 chunks, each searched once,
+46 minutes. Against the CLI's pre-whitened runs:
+
+- 25 of 26 run directories are identical: `tois.csv` / `matches.csv`,
+  `results.jsonl` (timings aside) and `summary.json`.
+- The 26th, sector 4's planets, differs only in the text of one error: TIC
+  300038935 (negative median PDCSAP flux) fails in both, but the message
+  carried the local scratch path. Errors now name only the file.
+- The page's embedded data is identical: 3,149 TOI rows, the sector 2-13 TCE
+  sample rows, and the scorecard. Sector 1 matches the published development
+  sample; the published page also shows a hold-out, which `BuildResults` does
+  not run.
