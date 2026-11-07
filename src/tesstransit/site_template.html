@@ -242,7 +242,7 @@
 
   <section class="tx-card" id="experiments">
     <h2>Detrending experiments (sector 1)</h2>
-    <p class="note">Each version of the search scored on sector 1's three samples. Variant 7a, a cubic spline whose knot spacing is chosen for each star, found more planets than the running median and roughly halved the signals on stars with no SPOC detection. Variant 7c, the current default, first removes stellar variability faster than 1.5 days, only on stars that vary that fast; over sectors 1-13 it found 682 of 707 planets against 7a's 676. The TCEs it no longer finds are short-period variability that never became TOIs. TCE counts are those in the search's period range.</p>
+    <p class="note">Each version of the search scored on sector 1's three samples. Variant 7a, a cubic spline whose knot spacing is chosen for each star, found more planets than the running median and roughly halved the signals on stars with no SPOC detection. Variant 7c first removes stellar variability faster than 1.5 days, only on stars that vary that fast; over sectors 1-13 it found 682 of 707 planets against 7a's 676. The TCEs it no longer finds are short-period variability that never became TOIs. Variant 7d, the current default, removes up to ten periodicities instead of three, down to 15-minute periods: the same 682 planets, and on pulsating stars 58% of strong injected transits found against 48%. TCE counts are those in the search's period range.</p>
     <div class="tx-wrap">
       <table data-source="variants" data-row-key="variant">
         <thead>
