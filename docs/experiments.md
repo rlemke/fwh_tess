@@ -648,6 +648,57 @@ So on planets SPOC's same-sector search did not report, the search does as
 well as on those it did. 200 of the 209 QLP-only TOI-sectors are out of
 reach in one sector, which is what stitching sectors addresses.
 
+## Stitched sectors 1-13: a pilot (2026-11-06)
+
+`python -m tesstransit.multisector` flattens each sector with the
+single-sector spline (pre-whitening included), stitches them, bins to 10
+minutes and searches 1 d to half the baseline, about 355,000 periods per
+star against 24,000 for a sector. Sample: 6,911 stars have 2-min data in at
+least nine of the thirteen sectors. Of those, 150 were drawn from stars with
+a TCE in SPOC's own sectors 1-13 search (265 TCEs) and 50 from stars with
+none. Each search took ~250 s per star with 12 in parallel. The same 200
+stars were run again inverted.
+
+Of the 265 TCEs, 62 were found. Most of the rest were out of reach by
+design:
+
+| TCE period | found | why the rest were missed |
+|---|---|---|
+| under 1 d | 22 of 110 (at a multiple) | 88 below the grid |
+| 1-13 d | 29 of 54 | 14 not detected, 11 search exhausted |
+| 13-26 d | 6 of 6 | |
+| 26-180 d | 5 of 56 | 38 not detected, 12 search exhausted |
+| over 180 d | 0 of 39 | above the grid (half the baseline) |
+
+All 9 TOIs in the sample were found: the TOI 700 system (9.98, 16.05 and
+37.43 d), 713.01 (36.0 d) and .02, 187.01, 867.01 (15.4 d) and 705.01
+(47.0 d). Most SPOC multi-sector TCEs at 26-180 d are near its own
+threshold (SNR 7-10) and not TOIs.
+
+⚠️ **False alarms at the single-sector thresholds (SNR 7.1, SDE 11).** On
+the 50 stars with no TCE, the search put a signal on 21 of them, and on 22
+of them when inverted. In both runs these are mostly two-transit signals at
+40-170 d. With 15 times the trial periods, two coincident dips in a year of
+data clear SDE 11 easily. Cuts measured on the same runs (signals from the
+full run, kept if they pass):
+
+| cut | stars without a TCE flagged, normal | inverted | TCE matches kept |
+|---|---|---|---|
+| none (SNR 7.1, SDE 11, 2 transits) | 21 / 50 | 22 / 50 | 62 / 62 |
+| 3 transits | 13 / 50 | 8 / 50 | 61 / 62 |
+| 3 transits, SNR 10 | 4 / 50 | 3 / 50 | 55 / 62 |
+| 3 transits, SDE 15 | 5 / 50 | 3 / 50 | 60 / 62 |
+| 3 transits, SDE 15, SNR 12 | 2 / 50 | 0 / 50 | 49 / 62 |
+
+Three transits and SDE 15 gives 6% inverted (Wilson 2-16%), against 13.5%
+for a single sector. That was chosen on this pilot, and the search itself
+was run at SDE 11, so a raised threshold could change which later signals
+are tried. It needs a fresh sample run at those settings before it is a
+default; the code still searches at SDE 11. On the TCE stars the inverted
+run flags 53-130 of 200 under any of these cuts. Those are mostly
+short-period signals on variable stars and binaries, where an inverted
+light curve still has periodic dips, so they say nothing about quiet stars.
+
 ## Transit-timing variations: TOI 216 (2026-11-06)
 
 `python -m tesstransit.ttv` times every transit on the stitched sectors
@@ -673,3 +724,34 @@ Both curves are smooth over the year and opposite in phase, 216.02 early
 while 216.01 is late: the exchange of energy between two resonant planets,
 the lighter inner one swinging more. No fixed period fits either, which is
 why each looked weak to a fixed-period search in single sectors.
+
+### Null test: chi² / dof does not single TOI 216 out
+
+The same timing was run on every signal of the stitched pilot (above) with
+at least four transits: 201 signals, most of them not TTV systems. Median
+chi² / dof is 33, the 90th percentile 87, and 16 of 201 exceed 100. TOI
+216.02's 100 is ordinary among them; only 216.01's 362 sits in the tail, and
+deep eclipsing binaries go higher still (11,500 and 2,400). Two causes,
+split by the signal's SNR per transit (its SNR over √transits):
+
+| SNR per transit | signals | median chi² / dof | median max \|O − C\| |
+|---|---|---|---|
+| under 2 | 140 | 33 | 197 min |
+| 2-5 | 37 | 39 | 161 min |
+| 5-10 | 8 | 62 | 51 min |
+| 10-30 | 5 | 10 | 20 min |
+| over 30 | 11 | 24 | 9 min |
+
+- Below ~5 a single transit is not detected on its own. The "time" is the
+  lowest noise point within ±1 duration (O − C near the window's limit),
+  and chi² + 1 on a noisy chi² curve understates the error.
+- Above ~10 the times are real, but chi² / dof still sits at 4-25. The
+  confirmed single planets here (TOI 700.01 and .02, 705.01, 713.01) give
+  3-7, so the errors are about 2× too small even when timing works. The
+  likely causes are 10-minute binning, the fixed 15% ingress and red noise.
+
+So chi² / dof is not a detection statistic as it stands. TOI 216 was
+recognised by its O − C curves: smooth over a year and opposite in phase,
+which noise does not produce. Before timing could screen a sample, it would
+need errors calibrated on these planets (or bootstrapped), a per-transit SNR
+floor of ~10, and a test for a smooth O − C rather than a large chi².

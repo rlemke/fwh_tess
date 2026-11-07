@@ -123,6 +123,22 @@ even ones:
 Most EB TOIs pass because they are diluted background binaries, which look
 like planets in shape and need a centroid test. Details: `docs/experiments.md`.
 
+## Searching all thirteen sectors at once
+
+`multisector.py` flattens each sector, stitches the year of data and
+searches 1 d to half the baseline. In a pilot of 200 stars (150 with a TCE
+from SPOC's sectors 1-13 search, 50 without), with at least nine sectors
+each, it found all 9 TOIs in the sample, including TOI 700.02 (37.4 d),
+713.01 (36.0 d) and 705.01 (47.0 d). A single sector holds at most one
+transit of any of these.
+
+⚠️ At the single-sector thresholds it is not usable. Inverted, it put a
+signal on 22 of the 50 stars without a TCE, because it tries 15 times as many
+periods and a dip that happens only twice is easy to fake. Requiring three
+transits and SDE 15 cut that to 3 of 50 and kept 60 of the 62 TCEs it had
+found. Those cuts were chosen on this pilot, so they still need a fresh
+sample. Details: `docs/experiments.md`.
+
 ## Tests
 
 ```bash

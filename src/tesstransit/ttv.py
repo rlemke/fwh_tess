@@ -18,6 +18,8 @@ months), or an eclipsing binary's light-travel time. One sector holds too few
 transits to show it, which is what a stitched year adds. ⚠️ A timing error
 from a spot crossing or a gap at ingress inflates chi-square too, so a large
 value is a candidate, not a detection, until the O - C curve is looked at.
+Measured on 201 ordinary stitched-pilot signals: median chi2_dof 33, and
+below ~5 SNR per transit the "times" are noise (docs/experiments.md).
 """
 
 from __future__ import annotations
