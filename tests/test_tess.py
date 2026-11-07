@@ -10,6 +10,7 @@ No test touches the network: light curves are synthetic and S3 is stubbed.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -405,6 +406,39 @@ def test_real_two_transit_planet_survives_the_veto():
     res = sr.search(t, f, 42, 1, FAST)
     assert abs(res.signals[0].period_days - 18.0) < 0.1
     assert not any(abs(v.period_days - 18.0) < 0.1 for v in res.vetoes)
+
+
+def test_two_coincident_dips_pass_one_event_veto_but_not_two():
+    # Two strong dips 6 d apart and nothing at the other times a 6 d period
+    # predicts: the stitched-search false alarm. Leaving out ONE event still
+    # shows the second dip, so only the two-event test can reject it.
+    t, f = _sector(noise_ppm=300)
+    f = f + _box(t, 1000.0, 1328.0, 5.0, 2000.0) + _box(t, 1000.0, 1334.0, 5.0, 2000.0)
+    off = sr.search(t, f, 42, 1, FAST)
+    assert any(
+        s.n_transits >= 3 and s.snr_without_two_strongest < 3.0 for s in off.signals
+    ), "without the two-event test the dip pair is reported"
+    on_cfg = replace(FAST, min_snr_without_two_strongest=3.0)
+    on = sr.search(t, f, 42, 1, on_cfg)
+    two = [v for v in on.vetoes if v.reason == "without_two_strongest"]
+    assert two, "the dip pair should be vetoed"
+    masked = sorted([two[0].strongest_event_btjd, two[0].second_event_btjd])
+    assert masked == pytest.approx([1328.0, 1334.0], abs=0.1)
+    for s in on.signals:
+        assert s.snr_without_two_strongest >= 3.0
+
+
+def test_real_multi_transit_planet_survives_the_two_event_veto():
+    t, f = _sector(planets=[(5.0, 1326.0, 3.0, 1000.0)])
+    cfg = replace(FAST, min_snr_without_two_strongest=3.0)
+    res = sr.search(t, f, 42, 1, cfg)
+    assert abs(res.signals[0].period_days - 5.0) < 0.05
+    assert not any(abs(v.period_days - 5.0) < 0.05 for v in res.vetoes)
+
+
+def test_two_event_threshold_must_not_be_negative():
+    with pytest.raises(ValueError, match="min_snr_without_two_strongest"):
+        replace(sr.SearchConfig(), min_snr_without_two_strongest=-1.0).validate()
 
 
 def test_final_peak_is_located():

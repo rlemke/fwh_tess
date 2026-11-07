@@ -106,6 +106,15 @@ class SearchConfig:
     # duration, which includes red noise (Pont et al. 2006). A vetoed peak's
     # strongest event is masked and the star searched again.
     min_snr_without_strongest: float = 3.0
+    # The same test with the TWO strongest events left out (0 = off). The
+    # one-event test cannot catch two coincident noise dips: each carries
+    # SNR ~5-7, so either alone still "shows" the signal. With 355,000 trial
+    # periods over a year of stitched data such pairs, plus a weak third
+    # event, made 16% of quiet stars' inverted light curves report a signal
+    # at SDE 15 (experiments.md, stitched hold-out). A real transit is in
+    # every event, so the rest still show it. Requires >= 3 events in
+    # effect. A vetoed peak has both events masked.
+    min_snr_without_two_strongest: float = 0.0
     max_vetoes: int = 5
     # Running-median width as a fraction of the period grid, so the detrended
     # SDE does not depend on how many trials the grid has (1001 of 24000).
@@ -185,6 +194,8 @@ class SearchConfig:
             raise ValueError("need 0 < min_period_days < max_period_days")
         if self.min_transits < 1:
             raise ValueError("min_transits must be >= 1")
+        if self.min_snr_without_two_strongest < 0:
+            raise ValueError("min_snr_without_two_strongest must be >= 0 (0 = off)")
         if self.max_signals < 1:
             raise ValueError("max_signals must be >= 1")
 
@@ -234,6 +245,7 @@ class Signal:
     n_transits: int  # transits with in-transit data
     snr_red: float | None = None  # combined per-event SNR, red-noise uncertainties
     snr_without_strongest: float | None = None  # the same, strongest event left out
+    snr_without_two_strongest: float | None = None  # ... two strongest left out
 
 
 @dataclass
@@ -248,6 +260,11 @@ class Veto:
     snr_red: float
     snr_without_strongest: float
     strongest_event_btjd: float  # masked before searching again
+    # "without_strongest" | "without_two_strongest"; the second event is
+    # masked too in the second case.
+    reason: str = "without_strongest"
+    snr_without_two_strongest: float | None = None
+    second_event_btjd: float | None = None
 
 
 @dataclass
@@ -623,6 +640,8 @@ class EventStats:
     snr_red: float
     snr_without_strongest: float
     strongest: int  # index into the arrays above
+    snr_without_two_strongest: float = 0.0
+    second: int | None = None  # index of the second-strongest event
 
 
 def binned_scatter(t: np.ndarray, f: np.ndarray, width: float) -> float:
@@ -688,9 +707,14 @@ def event_stats(
         w = 1.0 / sg[mask] ** 2
         return float(np.sum(d[mask] * w) / np.sum(w) * np.sqrt(np.sum(w)))
 
-    strongest = int(np.argmax(d / sg))
+    order = np.argsort(d / sg)[::-1]
+    strongest = int(order[0])
     rest = np.ones(len(d), dtype=bool)
     rest[strongest] = False
+    rest2 = rest.copy()
+    second = int(order[1]) if len(order) > 1 else None
+    if second is not None:
+        rest2[second] = False
     return EventStats(
         depths=d,
         sigmas=sg,
@@ -698,6 +722,8 @@ def event_stats(
         snr_red=combined(np.ones(len(d), dtype=bool)),
         snr_without_strongest=combined(rest),
         strongest=strongest,
+        snr_without_two_strongest=combined(rest2),
+        second=second,
     )
 
 
@@ -830,8 +856,18 @@ def search(
             return result
         use = keep & layer.valid
         ev = event_stats(time[use], layer.flat[use], p, t0, dur)
-        if ev.snr_without_strongest < cfg.min_snr_without_strongest:
+        fail1 = ev.snr_without_strongest < cfg.min_snr_without_strongest
+        fail2 = (
+            cfg.min_snr_without_two_strongest > 0
+            and ev.snr_without_two_strongest < cfg.min_snr_without_two_strongest
+        )
+        if fail1 or fail2:
             centre = float(ev.centres[ev.strongest])
+            second = (
+                float(ev.centres[ev.second])
+                if fail2 and not fail1 and ev.second is not None
+                else None
+            )
             result.vetoes.append(
                 Veto(
                     p,
@@ -842,12 +878,17 @@ def search(
                     ev.snr_red,
                     ev.snr_without_strongest,
                     centre,
+                    reason="without_strongest" if fail1 else "without_two_strongest",
+                    snr_without_two_strongest=ev.snr_without_two_strongest,
+                    second_event_btjd=second,
                 )
             )
             if len(result.vetoes) > cfg.max_vetoes:
                 result.stop_reason = "max_vetoes"
                 return result
-            keep &= np.abs(time - centre) >= cfg.mask_width_factor * dur / 2.0
+            for c in (centre, second):
+                if c is not None:
+                    keep &= np.abs(time - c) >= cfg.mask_width_factor * dur / 2.0
             continue
         result.signals.append(
             Signal(
@@ -861,6 +902,7 @@ def search(
                 n_transits=len(ev.depths),
                 snr_red=ev.snr_red,
                 snr_without_strongest=ev.snr_without_strongest,
+                snr_without_two_strongest=ev.snr_without_two_strongest,
             )
         )
         if len(result.signals) >= cfg.max_signals:
