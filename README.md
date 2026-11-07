@@ -140,9 +140,12 @@ periods and a pair of noise dips is easy to line up. Three transits and SDE
 out, the rest must still show the dip at SNR 3. Together with SDE 13, which
 is now the stitched search's default, a third sample fixed in advance put an
 inverted signal on 3 of its 50 stars without a TCE, and kept all 9 in-grid
-planet TOIs (including TOI 1209.01 at 40.7 d). ⚠️ With 50 stars that is
-6% with a 95% range of 2-16%, so it is better than a single sector's 14% but
-not yet measured precisely. Details: `docs/experiments.md`.
+planet TOIs (including TOI 1209.01 at 40.7 d). ⚠️ On 250 more stars without a
+TCE, chosen fresh, the inverted rate is 10.4% (7.2-14.8%), lower than a
+single sector's 14% but not clearly so. Half of these false alarms are 1-2.5 d
+stellar variability, found at the same period in both directions. The other
+half are long-period signals whose events sit at data-segment edges. Details:
+`docs/experiments.md`.
 
 ## Tests
 

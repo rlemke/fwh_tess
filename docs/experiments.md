@@ -842,3 +842,51 @@ sectors), whose two planets were in the archive's November 2026 additions,
 was missed in 11 of 12 single sectors. Stitched, both are found at either
 setting: 18.5523 d at SNR 28.5 and 9.6958 d at SNR 11.1, with the rest at
 SNR 19.0 and 7.6 after the two strongest transits are dropped.
+
+## The false-alarm rate on 250 fresh stars (2026-11-07): 10%, not 6%
+
+The adopted default (SDE 13, two-event test at SNR 3) run unchanged on 250
+stars without a TCE, none in an earlier sample (seed 4, `--n-tce 0`,
+`--holdout-of` all three earlier runs), searched inverted and as observed.
+Runs `ms-fa250-inv`, `ms-fa250` (~55 min each; cache `lc_ms_fa`).
+
+| | stars with a signal, of 250 | Wilson 95% |
+|---|---|---|
+| inverted | **26** (10.4%) | 7.2-14.8% |
+| inverted, pooled with `ms-v3` (29 / 300) | 9.7% | 6.8-13.5% |
+| as observed | 17 (6.8%) | 4.3-10.6% |
+
+So the 3 / 50 of `ms-v3` was the low end of its range. The stitched search's
+rate is lower than a single sector's 14% (10.8-16.7%) but the two ranges
+overlap. The false alarms are two different populations:
+
+| period | inverted, stars | as observed, stars |
+|---|---|---|
+| 1.0-2.5 d | 14 | 14 |
+| 4.7 d | 1 | 0 |
+| 33-150 d | 12 | 3 |
+
+**Short periods: stellar variability.** Most of these are the same stars at the
+same period in both directions (e.g. TIC 309657720 at 1.286 d, 150437899 at
+1.319 d, 220411074 at 1.60 d, 142018697 at 1.85 d, 150391740 at 1.87 d), with
+depths of 30-1,100 ppm and 3-4 h boxes. A signal found in both directions
+is symmetric, and a transit is not. These stars are periodic, either just above
+the 1.5 d pre-whitening limit or below it but not removed by its gates.
+
+**Long periods: data edges.** The long-period signals pass the two-event
+test only barely (11 of 14 inverted have SNR 3.1-4.8 with the two strongest
+transits left out). Their events sit at the start or end of a data segment
+(a sector start or the mid-sector downlink gap): **17 of 59 events lie within
+0.5 d of an edge**, where only 9.7% of the data is, and 12 of the 17
+long-period signals have at least one such event. Several share a time
+across unrelated stars (four at BTJD 1491.6-1491.8, the start of sector 7).
+The ramp at a segment edge, which the spline does not follow, is mostly a
+brightening: inverted, it becomes a dip, which explains 12 stars inverted
+against 3 as observed.
+
+Not yet tested, each to be fixed in advance and scored on a fresh sample:
+(1) leave out the first and last ~0.5 d of each segment, or veto an event
+that lies within 0.5 d of an edge; (2) a both-directions test, a signal whose
+period the inverted search also finds is variability, not a transit.
+Scored afterwards on these stars, only as a guide: the edge rule would leave
+3 of the 12 inverted long-period stars, and inverted 26 → about 17.
