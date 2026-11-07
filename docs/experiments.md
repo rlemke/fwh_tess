@@ -699,6 +699,41 @@ run flags 53-130 of 200 under any of these cuts. Those are mostly
 short-period signals on variable stars and binaries, where an inverted
 light curve still has periodic dips, so they say nothing about quiet stars.
 
+### Hold-out at 3 transits, SDE 15 (2026-11-07): the cut does not hold
+
+A fresh 200 stars (seed 2, `--holdout-of runs/ms-pilot`, no star shared
+with the pilot; 150 with a TCE, 305 TCEs, and 50 without), this time
+searched AT the cut (`--set sde_threshold=15 --set min_transits=3`), once
+normally and once inverted. Runs `ms-holdout` and `ms-holdout-inv`, ~48 min
+each with 12 workers (light curves cached in `lc_ms_ho`, 4.1 GB).
+
+| | pilot (cut applied afterwards) | hold-out (searched at the cut) |
+|---|---|---|
+| stars without a TCE flagged, normal | 5 / 50 | 4 / 50 |
+| stars without a TCE flagged, inverted | 3 / 50 (Wilson 2-16%) | **8 / 50 (Wilson 8-28%)** |
+| planet-like TOIs found | 9 / 9 | 5 / 6 |
+| TCEs found, 26-180 d | 5 / 56 (at SDE 11) | 1 / 71 |
+
+The inverted rate is 16%, no better than a single sector's 14%. Six of the
+eight inverted signals are still long-period, 27-119 d, so a third transit
+does not stop coincident dips once there are 355,000 trial periods. The
+other two are at 1.01-1.02 d. The 3 / 50 on the pilot was a cut chosen on
+the data it was scored on.
+
+The planets are fine: TOI 813.01 at 84 d was found, as were 210.01, 789.01
+and .02. The miss is 789.03 (8.04 d), the third planet of that star, which
+went to search exhaustion. But at SDE 15 only 1 of 71 TCEs at 26-180 d was
+found, against 5 of 56 at SDE 11, because SPOC's own long-period TCEs sit
+near its threshold.
+
+**Not adopted.** The stitched search keeps the single-sector defaults, and
+its long-period signals stay unvetted: about one quiet star in six gets a
+false one. A threshold alone does not fix this. Two candidates are an
+individual-transit test (each event should be significant on its own,
+which a pair of coincident noise dips is not) and calibrating the SDE
+against the trial count per period range instead of using one value for
+the whole grid.
+
 ## Transit-timing variations: TOI 216 (2026-11-06)
 
 `python -m tesstransit.ttv` times every transit on the stitched sectors
