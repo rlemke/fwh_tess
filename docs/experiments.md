@@ -790,3 +790,55 @@ recognised by its O − C curves: smooth over a year and opposite in phase,
 which noise does not produce. Before timing could screen a sample, it would
 need errors calibrated on these planets (or bootstrapped), a per-transit SNR
 floor of ~10, and a test for a smooth O − C rather than a large chi².
+
+### The two-event veto (2026-11-07): adopted for the stitched search
+
+The hold-out's eight inverted false alarms were nearly all two strong dips
+plus a weak third event. The existing veto drops ONE event (the strongest)
+and asks the rest to show the dip at SNR 3, which the second dip alone
+satisfies. `min_snr_without_two_strongest` drops the TWO strongest. A real
+transit is in every event, so the rest still show it, and a dip pair does
+not. A vetoed peak has both events masked and the search goes on.
+
+Scored afterwards on the stored signals (each event's SNR recomputed from the
+cached light curves, the star's other signals masked), stars without a TCE
+with an inverted signal, of 50:
+
+| | without | with the two-event test at SNR 3 |
+|---|---|---|
+| pilot, SDE 11 | 22 | 7 |
+| pilot, SDE 13 | 7 | 2 |
+| hold-out, SDE 15 (searched at 3 transits) | 8 | 1 |
+
+Planet TOIs kept: 9 of 9 and 4 of 4. TCE matches kept: 48 of 50 (one is a
+two-transit TCE, which the test rejects by design) and 63 of 63. A ratio
+form (the weaker events' mean SNR over all events') did not separate: many
+of the pilot's inverted signals with 3+ events are as even as a planet.
+
+Both samples had now been looked at, so the decision went to a third.
+**Fixed before running:** SDE 13 with the two-event test at SNR 3, on 200
+fresh stars (seed 3, `--holdout-of` both earlier runs); adopt for the
+stitched search if at most 4 of 50 stars without a TCE give an inverted
+signal and no planet TOI is lost except by design. Runs `ms-v3`,
+`ms-v3-inv` (~60 min each; cache `lc_ms_v3`).
+
+| | result |
+|---|---|
+| stars without a TCE, inverted signal | **3 / 50** (6%, Wilson 2-16%) |
+| stars without a TCE, normal signal | 5 / 50 |
+| planet-like TOIs in the grid | 9 / 9, incl. 1209.01 at 40.7 d |
+| TCE matches (incl. aliases) | 66 / 289 (hold-out 68 / 305 at SDE 15) |
+
+The missed planet TOI is 199.01 at 314.6 d, above the grid (half the
+baseline). Of the three inverted false alarms, two are 1.04 and 1.15 d
+signals that appear in both directions (variability, which the single-sector
+search also reports), and one is a 37.9 d, 5,000 ppm event at SNR 30. The
+long-period dip pairs are gone. **Adopted** as `multisector.STITCHED_DEFAULTS`
+(the single-sector `SearchConfig` keeps it off). 50 stars cannot pin the rate
+down; its 95% range still reaches the single-sector 14%.
+
+A targeted check, not part of any sample: TOI 214 (TIC 167415965, 12
+sectors), whose two planets were in the archive's November 2026 additions,
+was missed in 11 of 12 single sectors. Stitched, both are found at either
+setting: 18.5523 d at SNR 28.5 and 9.6958 d at SNR 11.1, with the rest at
+SNR 19.0 and 7.6 after the two strongest transits are dropped.

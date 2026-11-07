@@ -132,12 +132,17 @@ each, it found all 9 TOIs in the sample, including TOI 700.02 (37.4 d),
 713.01 (36.0 d) and 705.01 (47.0 d). A single sector holds at most one
 transit of any of these.
 
-⚠️ At the single-sector thresholds it is not usable. Inverted, it put a
+At the single-sector thresholds it is not usable. Inverted, it put a
 signal on 22 of the 50 stars without a TCE, because it tries 15 times as many
-periods and a dip that happens only twice is easy to fake. Requiring three
-transits and SDE 15 cut that to 3 of 50 and kept 60 of the 62 TCEs it had
-found. Those cuts were chosen on this pilot, so they still need a fresh
-sample. Details: `docs/experiments.md`.
+periods and a pair of noise dips is easy to line up. Three transits and SDE
+15 looked like a fix on that pilot (3 of 50) but failed a fresh sample (8 of
+50). What works is a per-transit test: with the two strongest transits left
+out, the rest must still show the dip at SNR 3. Together with SDE 13, which
+is now the stitched search's default, a third sample fixed in advance put an
+inverted signal on 3 of its 50 stars without a TCE, and kept all 9 in-grid
+planet TOIs (including TOI 1209.01 at 40.7 d). ⚠️ With 50 stars that is
+6% with a 95% range of 2-16%, so it is better than a single sector's 14% but
+not yet measured precisely. Details: `docs/experiments.md`.
 
 ## Tests
 

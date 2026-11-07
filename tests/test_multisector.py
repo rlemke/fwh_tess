@@ -47,3 +47,12 @@ def test_stitched_search_finds_a_period_no_single_sector_shows_twice():
 def test_eligible_counts_sectors_per_star():
     m = {1: {10: "a", 11: "b"}, 2: {10: "c"}, 3: {10: "d", 12: "e"}}
     assert ms.eligible(m, 3) == {10: {1: "a", 2: "c", 3: "d"}}
+
+
+def test_stitched_defaults_differ_from_single_sector_only_where_declared():
+    single = sr.SearchConfig()
+    cfg = ms.base_config()
+    assert cfg.sde_threshold == 13.0 and cfg.min_snr_without_two_strongest == 3.0
+    assert single.min_snr_without_two_strongest == 0.0  # single sector unchanged
+    # --set still wins over the stitched defaults
+    assert cfg.override(["sde_threshold=11"]).sde_threshold == 11.0

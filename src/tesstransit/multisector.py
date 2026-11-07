@@ -114,6 +114,30 @@ def stitched_config(
     )
 
 
+# Thresholds where the stitched search differs from a single sector's. It
+# tries ~15x the periods, so coincident noise dips clear the single-sector
+# cuts: at SNR 7.1 / SDE 11 the inverted light curves of 22 of 50 quiet stars
+# reported a signal (pilot), at 3 transits / SDE 15 still 8 of 50 (hold-out).
+# The two-event veto plus SDE 13 was fixed BEFORE a third, fresh sample
+# (seed 3, experiments.md) and gave 3 of 50, all 9 in-grid planet TOIs kept.
+STITCHED_DEFAULTS: dict[str, Any] = {
+    "sde_threshold": 13.0,
+    "min_snr_without_two_strongest": 3.0,
+}
+
+
+def base_config(prewhiten: bool = True, invert: bool = False) -> sr.SearchConfig:
+    """The stitched search's SearchConfig before any ``--set`` overrides."""
+    cfg = replace(
+        sr.SearchConfig(),
+        prewhiten_max_period_days=1.5 if prewhiten else 0.0,
+        invert_flux=invert,
+        **STITCHED_DEFAULTS,
+    )
+    cfg.validate()
+    return cfg
+
+
 def _search_star(
     tic: int,
     keys: dict[int, str],
@@ -202,10 +226,7 @@ def main(argv: list[str] | None = None) -> int:
     )  # fmt: skip
     args = ap.parse_args(argv)
 
-    cfg = sr.SearchConfig(
-        prewhiten_max_period_days=1.5 if args.prewhiten else 0.0,
-        invert_flux=args.invert,
-    ).override(args.set)
+    cfg = base_config(prewhiten=args.prewhiten, invert=args.invert).override(args.set)
     args.out.mkdir(parents=True, exist_ok=True)
     sectors = parse_sectors(args.sectors)
     client = lc.s3_client()
