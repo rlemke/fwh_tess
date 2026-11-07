@@ -501,6 +501,21 @@ def test_holdout_sample_shares_no_stars_and_keeps_snr_coverage():
     assert len(ho) == 20 and min(ho) < 20 and max(ho) > 180  # faint to strong
 
 
+def test_quiet_only_sample_for_false_alarm_runs():
+    from tesstransit import pilot
+
+    tces = [
+        mt.TCE(f"{i}-01", i, 1, 3.0, 1326.0, 2.0, None, 9.0, None) for i in range(1, 51)
+    ]
+    targets = {i: f"k{i}" for i in range(1, 401)}
+    for exclude in (frozenset(), frozenset(range(51, 101))):
+        stars, quiet, _ = pilot.select_sample(
+            tces, targets, 0, 40, seed=4, exclude=exclude
+        )
+        assert stars == [] and len(quiet) == 40
+        assert all(q > 50 for q in quiet) and not set(quiet) & exclude
+
+
 # --- the planet (TOI) sample -------------------------------------------------
 
 _TOI_HEAD = (

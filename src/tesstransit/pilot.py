@@ -154,7 +154,9 @@ def select_sample(
         key=lambda k: best[k],
     )
     rng = np.random.default_rng(seed)
-    if n_tce >= len(ranked):
+    if n_tce <= 0:  # a quiet-only sample, e.g. to measure the false-alarm rate
+        tce_stars = []
+    elif n_tce >= len(ranked):
         tce_stars = ranked
     elif exclude:
         tce_stars = sorted(int(rng.choice(b)) for b in np.array_split(ranked, n_tce))
