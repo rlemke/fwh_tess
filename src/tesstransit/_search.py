@@ -34,7 +34,9 @@ import numpy as np
 @dataclass(frozen=True)
 class SearchConfig:
     # How the light curve is flattened before the search.
-    #   detrend_method: "median" (running median) or "biweight" (Tukey's
+    #   detrend_method: "median" (running median), "none" (the flux is
+    #     already flattened -- the multi-sector search flattens each sector
+    #     before stitching) or "biweight" (Tukey's
     #     biweight location via wotan; robust to the transit itself pulling
     #     the trend down -- needs the [wotan] extra).
     #   detrend_per_duration: False = ONE flattening with detrend_window_days
@@ -125,6 +127,14 @@ class SearchConfig:
     # transits at 3.7-23 d 41.8-159.6. ⚠️ PROVISIONAL: real TESS noise is red,
     # so calibrate on real non-TCE stars.
     sde_threshold: float = 11.0
+    # Red-noise-aware power (experimental, off by default). BLS weighs every
+    # point by the white scatter, so on a pulsator the residual variability
+    # makes any transit-length box look significant and the periodogram is
+    # full of it. With this on, each trial duration's power and SNR are
+    # divided by beta^2 and beta, where beta = the scatter of the flux binned
+    # to that duration over what white noise predicts (Pont et al. 2006;
+    # floored at 1), measured on the points still searched.
+    red_noise_power: bool = False
     max_signals: int = 3
     # False-alarm test (Kepler DR25's inverted light curves): search 2 - flux
     # instead of flux. A transit becomes a brightening, which a dip search
@@ -137,7 +147,7 @@ class SearchConfig:
     mask_width_factor: float = 1.5  # mask this many durations around each transit
 
     def validate(self) -> None:
-        if self.detrend_method not in ("median", "biweight", "spline"):
+        if self.detrend_method not in ("median", "biweight", "spline", "none"):
             raise ValueError(f"unknown detrend_method {self.detrend_method!r}")
         if self.detrend_per_duration and self.detrend_window_factor < 3:
             raise ValueError("detrend_window_factor under 3 would flatten the transits")
@@ -160,7 +170,11 @@ class SearchConfig:
                     f"spline knot spacing {min(self.spline_knot_days)} d is under 1.5x "
                     f"the longest duration searched ({longest:.3f} d)"
                 )
-        elif not self.detrend_per_duration and self.detrend_window_days < 3 * longest:
+        elif (
+            self.detrend_method != "none"
+            and not self.detrend_per_duration
+            and self.detrend_window_days < 3 * longest
+        ):
             raise ValueError(
                 f"detrend window {self.detrend_window_days} d is under 3x the longest "
                 f"duration searched ({longest:.3f} d); it would flatten those transits"
@@ -480,6 +494,8 @@ def detrend(
     """``flux`` divided by its trend. May contain NaN (biweight, sparse edges)."""
     if np.any(np.diff(time) < 0):
         raise ValueError("time must be sorted ascending")
+    if method == "none":  # already flattened (multisector: per sector, then stitched)
+        return np.array(flux, dtype=float)
     if method == "spline":
         return flux / spline_trend(time, flux, knot_days)[0]
     if method == "median":
@@ -625,6 +641,22 @@ def binned_scatter(t: np.ndarray, f: np.ndarray, width: float) -> float:
     return float(1.4826 * np.median(np.abs(means - np.median(means))))
 
 
+def red_noise_beta(
+    t: np.ndarray, f: np.ndarray, durations: np.ndarray, scatter: float
+) -> dict[float, float]:
+    """Per duration: binned scatter over the white-noise prediction, floored at 1."""
+    cadence = float(np.median(np.diff(t)))
+    out = {}
+    for d in durations:
+        try:
+            red = binned_scatter(t, f, float(d))
+        except ValueError:
+            red = 0.0
+        white = scatter / np.sqrt(max(1.0, float(d) / cadence))
+        out[float(d)] = max(1.0, red / white)
+    return out
+
+
 def event_stats(
     t: np.ndarray, f: np.ndarray, period: float, epoch: float, duration: float
 ) -> EventStats:
@@ -734,13 +766,34 @@ def search(
             bls = BoxLeastSquares(
                 time[use], layer.flat[use], dy=np.full(use.sum(), layer.scatter)
             )
+            beta = (
+                red_noise_beta(time[use], layer.flat[use], layer.durations, layer.scatter)
+                if cfg.red_noise_power
+                else {}
+            )  # fmt: skip
             for sel, allowed in chunks:
                 d = np.intersect1d(allowed, layer.durations)
                 if len(d) == 0:
                     continue
-                r = bls.power(periods[sel], d, objective="likelihood")
-                for k in fields:
-                    grid[k][li, sel] = np.asarray(getattr(r, k))
+                if not beta:
+                    r = bls.power(periods[sel], d, objective="likelihood")
+                    for k in fields:
+                        grid[k][li, sel] = np.asarray(getattr(r, k))
+                    continue
+                # One duration at a time, so each is scaled by its own beta
+                # before the best duration at a period is chosen.
+                idx = np.flatnonzero(sel) if sel.dtype == bool else np.asarray(sel)
+                for dd in d:
+                    r = bls.power(periods[sel], [dd], objective="likelihood")
+                    bt = beta[float(dd)]
+                    pw = np.asarray(r.power) / bt**2
+                    better = pw > grid["power"][li, idx]
+                    grid["power"][li, idx[better]] = pw[better]
+                    grid["depth_snr"][li, idx[better]] = (
+                        np.asarray(r.depth_snr)[better] / bt
+                    )
+                    for k in ("transit_time", "duration", "depth"):
+                        grid[k][li, idx[better]] = np.asarray(getattr(r, k))[better]
         # Likelihood power ~ SNR^2 / 2 with each layer's own scatter, so the
         # layers are comparable: keep the best layer at each period.
         best_layer = np.argmax(grid["power"], axis=0)

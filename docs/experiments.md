@@ -563,3 +563,28 @@ Pulsators remain the weak spot: ~40% of strong transits on them are still
 missed. What is left is not periodic enough to fit with sinusoids
 (amplitude-modulated modes, beating) and needs a red-noise-aware detection
 statistic rather than more terms.
+
+## Red-noise-aware power (2026-11-06; kept off)
+
+`red_noise_power` divides each trial duration's BLS power and SNR by beta^2
+and beta, beta being the scatter of the flux binned to that duration over
+the white-noise prediction (Pont et al. 2006), so a box the length of a
+pulsation residue no longer looks significant. Screened on the 69 no-TCE
+stars whose default search used every pre-whitening term (414 injections,
+the same stars inverted, 18 TCE-backed planets), with v3 pre-whitening:
+
+| | strong injections found (SNR >= 15, of 171) | false alarms (of 69) | planets (of 18) | s / search |
+|---|---|---|---|---|
+| default | 73 | 20 | 14 | 2.4 |
+| red-noise power | 68 (+2 −7) | 13 | 14 | 8.0 |
+| red-noise power, SDE 9 | 68 | 16 | 14 | 8.8 |
+| red-noise power, SNR 6 | 76 | 18 | 15 | 8.7 |
+
+Measured honestly, the transits still missed on pulsators are weak: scaling
+the significance by the red noise cuts false alarms by a third and finds no
+more of them. Lowering the cut to SNR 6 to compensate is a wash inside the
+counting noise, at 3.6x the run time, and would loosen the cut on ordinary
+stars (beta ~ 1). So the option stays off; it is a false-alarm lever if one is
+needed, not a completeness one. The ~40% of strong transits missed on
+pulsators are, at their real red-noise SNR, mostly below any threshold that
+keeps the false-alarm rate.
