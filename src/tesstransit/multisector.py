@@ -46,7 +46,7 @@ from . import _lightcurve as lc
 from . import _manifest as mf
 from . import _match as mt
 from . import _search as sr
-from .pilot import _result_from_dict, _toi_for, parse_tois, select_sample
+from .pilot import _result_from_dict, _toi_for, parse_tois, select_sample, stars_of
 
 _client: Any = None
 
@@ -187,6 +187,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--min-period", type=float, default=1.0)
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--keep-lc", action="store_true")
+    ap.add_argument(
+        "--holdout-of", type=Path, action="append", default=[],
+        help="earlier run dir(s): draw a sample sharing none of their stars",
+    )  # fmt: skip
     ap.add_argument("--invert", action="store_true", help="false-alarm run (2 - flux)")
     ap.add_argument(
         "--no-prewhiten", dest="prewhiten", action="store_false",
@@ -212,7 +216,7 @@ def main(argv: list[str] | None = None) -> int:
     stars = eligible(manifests, args.min_sectors)
     tces = mt.parse_tce_csv(args.tce_csv.read_text())
     tce_stars, quiet, unobserved = select_sample(
-        tces, stars, args.n_tce, args.n_quiet, args.seed
+        tces, stars, args.n_tce, args.n_quiet, args.seed, stars_of(args.holdout_of)
     )
     print(
         f"{len(stars)} stars with 2-min data in >= {args.min_sectors} of sectors "
@@ -282,6 +286,7 @@ def main(argv: list[str] | None = None) -> int:
         "eligible_stars": len(stars),
         "bin_minutes": args.bin_minutes,
         "sample": {"tce_stars": len(tce_stars), "quiet_stars": len(quiet), "failed": failed},
+        "holdout_of": [str(p) for p in args.holdout_of],
         "tce_stars_not_eligible": len(unobserved),
         "tces_in_sample": len(sampled),
         "tce_group": mt.summarise([r for r in rows if r.tic_id in tce_set]),
