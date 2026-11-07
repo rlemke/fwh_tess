@@ -276,6 +276,13 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="false-alarm test: search 2 - flux, so every signal is a false alarm",
     )
+    ap.add_argument(
+        "--set",
+        action="append",
+        default=[],
+        metavar="FIELD=VALUE",
+        help="override one SearchConfig field (repeatable), e.g. prewhiten_max_terms=5",
+    )
     args = ap.parse_args(argv)
 
     cfg = sr.SearchConfig(
@@ -286,7 +293,7 @@ def main(argv: list[str] | None = None) -> int:
             1.5 if args.prewhiten and args.detrend_method == "spline" else 0.0
         ),
     )
-    cfg.validate()
+    cfg = cfg.override(args.set)
     args.out.mkdir(parents=True, exist_ok=True)
     client = lc.s3_client()
     t0 = time.time()

@@ -24,7 +24,7 @@ signal below threshold or at ``max_signals``.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields, replace
 from itertools import pairwise
 from typing import Any
 
@@ -62,9 +62,14 @@ class SearchConfig:
     # a transit or eclipse only dims the star, so a fitted shape whose
     # brightening is under prewhiten_min_symmetry of its dimming is left in --
     # ultra-short-period planets and eclipsing binaries are what we search for.
+    # Ten terms down to 0.01 d (was three down to 0.05 d): a delta Scuti star
+    # pulsates in many modes, some under an hour, and three terms left most of
+    # it in. Over sectors 1-13 that found 112 of 229 injected transits at
+    # expected SNR >= 15 on pre-whitened stars (was 88), with the same 682 of
+    # 707 planets and no change on other stars (docs/experiments.md).
     prewhiten_max_period_days: float = 0.0
-    prewhiten_min_period_days: float = 0.05
-    prewhiten_max_terms: int = 3
+    prewhiten_min_period_days: float = 0.01
+    prewhiten_max_terms: int = 10
     prewhiten_harmonics: int = 3
     prewhiten_fap: float = 1e-4
     prewhiten_min_symmetry: float = 0.3
@@ -168,6 +173,32 @@ class SearchConfig:
             raise ValueError("min_transits must be >= 1")
         if self.max_signals < 1:
             raise ValueError("max_signals must be >= 1")
+
+    def override(self, pairs: list[str]) -> SearchConfig:
+        """A copy with ``FIELD=VALUE`` settings applied (the CLIs' ``--set``), validated.
+
+        Values are parsed by the field's current type; a tuple takes a comma list.
+        """
+        types = {f.name: type(getattr(self, f.name)) for f in fields(self)}
+        kw: dict[str, Any] = {}
+        for pair in pairs:
+            name, sep, value = pair.partition("=")
+            if not sep or name not in types:
+                raise ValueError(
+                    f"--set {pair!r}: expected FIELD=VALUE, FIELD a SearchConfig field"
+                )
+            kind = types[name]
+            if kind is tuple:
+                kw[name] = tuple(float(x) for x in value.split(","))
+            elif kind is bool:
+                if value not in ("true", "false"):
+                    raise ValueError(f"--set {pair!r}: a boolean is true or false")
+                kw[name] = value == "true"
+            else:
+                kw[name] = kind(value)
+        out = replace(self, **kw)
+        out.validate()
+        return out
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)

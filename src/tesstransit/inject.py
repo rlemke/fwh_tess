@@ -182,6 +182,7 @@ def _inject_star(
     cfg: sr.SearchConfig,
     per_star: int,
     seed: int,
+    replay: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     global _client
     if _client is None:
@@ -197,10 +198,14 @@ def _inject_star(
         return [{"tic_id": tic, "ok": False, "error": f"{type(exc).__name__}: {exc}"}]
     rng = np.random.default_rng([seed, sector, tic])
     out: list[dict[str, Any]] = []
-    for i in range(per_star):
+    for i in range(len(replay) if replay is not None else per_star):
         t0 = time.time()
         try:
-            inj = draw(rng, curve.time, sigma, i)
+            inj = (
+                Injection(**replay[i])
+                if replay is not None
+                else draw(rng, curve.time, sigma, i)
+            )
             ing = _ingress_hours(inj.duration_hours, inj.impact, inj.radius_ratio)
             loss = trapezoid(
                 curve.time,
@@ -249,6 +254,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--sample-run", type=Path, required=True, help="a pilot run dir")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--per-star", type=int, default=6)
+    ap.add_argument(
+        "--replay",
+        type=Path,
+        help="an earlier run's injections.jsonl: search THE SAME transits (same "
+        "depths) instead of drawing, so two configurations are compared pairwise",
+    )
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--keep-lc", action="store_true")
@@ -258,10 +269,17 @@ def main(argv: list[str] | None = None) -> int:
         default=True,
         help="first remove two-sided stellar periodicities faster than 1.5 d",
     )
+    ap.add_argument(
+        "--set",
+        action="append",
+        default=[],
+        metavar="FIELD=VALUE",
+        help="override one SearchConfig field (repeatable), e.g. prewhiten_max_terms=5",
+    )
     args = ap.parse_args(argv)
 
     cfg = sr.SearchConfig(prewhiten_max_period_days=1.5 if args.prewhiten else 0.0)
-    cfg.validate()
+    cfg = cfg.override(args.set)
     args.out.mkdir(parents=True, exist_ok=True)
     client = lc.s3_client()
     targets = mf.load_or_list(
@@ -269,6 +287,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     tces = mt.parse_tce_csv(args.tce_csv.read_text())
     stars = no_tce_stars(args.sample_run, tces)
+    replay: dict[int, list[dict[str, Any]]] = {}
+    if args.replay:
+        for ln in args.replay.read_text().splitlines():
+            r = json.loads(ln)
+            if r["ok"]:
+                replay.setdefault(r["tic_id"], []).append(r["injection"])
+        stars = [s for s in stars if s in replay]
     print(f"{len(stars)} no-TCE stars x {args.per_star} injections", file=sys.stderr)
 
     records: list[dict[str, Any]] = []
@@ -277,7 +302,7 @@ def main(argv: list[str] | None = None) -> int:
         futs = [
             pool.submit(
                 _inject_star, tic, args.sector, targets[tic], str(args.workdir),
-                args.keep_lc, cfg, args.per_star, args.seed,
+                args.keep_lc, cfg, args.per_star, args.seed, replay.get(tic) if args.replay else None,
             )
             for tic in stars
         ]  # fmt: skip
@@ -320,6 +345,7 @@ def main(argv: list[str] | None = None) -> int:
         "sample_run": args.sample_run.name,
         "stars": len(stars),
         "per_star": args.per_star,
+        "replay": str(args.replay.parent.name) if args.replay else None,
         "seed": args.seed,
         "injections": len(ok),
         "failed": [r for r in records if not r["ok"]],

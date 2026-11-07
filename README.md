@@ -75,12 +75,13 @@ Every term, field and outcome — ours and SPOC's `tce_*` columns — is defined
 Searching the same light curves turned upside down (`pilot --invert`) turns
 every transit into a brightening, so whatever the inverted search still
 reports is a false alarm. Over the 520 no-TCE sample stars of sectors 1–13, at
-the current cut (SDE 11, SNR 7.1): **14.0% (11.3–17.3%) give a false alarm**.
-The normal search gives a signal on 13.5% of the same stars, so signals on
+the current cut (SDE 11, SNR 7.1): **13.5% (10.8–16.7%) give a false alarm**.
+The normal search gives a signal on 12.7% of the same stars, so signals on
 stars without a TCE are, as a group, what false alarms alone produce. Most are
 periodic variability under a day that survives pre-whitening, not white
-noise, and a stricter cut costs planets faster than it removes them (SDE 14:
-9.8% false alarms, 92.9% of planets). Details: `docs/experiments.md`.
+noise, and a stricter cut costs planets faster than it removes them (SDE 14,
+measured with the earlier three-term pre-whitening: 9.8% false alarms, 92.9%
+of planets). Details: `docs/experiments.md`.
 
 ## Completeness is measured
 
@@ -91,14 +92,15 @@ white-noise SNR from the star's own scatter), drawn from 4 to 40.
 
 | | 50% found at | 90% found at | found, expected SNR ≥ 20 |
 |---|---|---|---|
-| all stars | SNR 9.6 | SNR 21.2 | 90.1% |
-| stars without fast variability (82%) | SNR 7.9 | SNR 11.8 | 98.8% |
-| pulsating stars, pre-whitened (18%) | — | — | 47.8% |
+| all stars | SNR 9.4 | SNR 19.7 | 92.0% |
+| stars without fast variability (82%) | SNR 7.9 | SNR 11.7 | 99.0% |
+| pulsating stars, pre-whitened (18%) | SNR 24.7 | SNR 56.2 | 57.9% |
 
 On ordinary stars the search does what its SNR 7.1 threshold promises. On
-pulsating stars the residual red noise buries the transit, and pre-whitening
-is the reason it is not worse (on those stars it finds 48% of strong
-injections against 36% without it). Details: `docs/experiments.md`.
+pulsating stars the residual red noise buries the transit. Pre-whitening up
+to ten periodicities down to 0.01 d (tuned on these injections; it was three
+down to 0.05 d) raised strong transits found there from 48% to 58% with the
+same planets found and no change on other stars. Details: `docs/experiments.md`.
 
 ## Tests
 

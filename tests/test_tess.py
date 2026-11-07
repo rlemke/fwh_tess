@@ -690,3 +690,16 @@ def test_prewhiten_dip_mask_protects_a_transit_inside_variability():
     bare = sr.SearchConfig(prewhiten_max_period_days=1.5, prewhiten_mask_dips=False)
     unmasked = pilot.forced_stats(t, f, eph, bare)["p"]["snr_red"]
     assert masked >= unmasked and masked > 15
+
+
+def test_config_override_parses_by_field_type_and_validates():
+    cfg = sr.SearchConfig().override(
+        ["prewhiten_max_terms=4", "sde_threshold=12", "invert_flux=true",
+         "spline_knot_days=1,2"]
+    )  # fmt: skip
+    assert cfg.prewhiten_max_terms == 4 and cfg.sde_threshold == 12.0
+    assert cfg.invert_flux is True and cfg.spline_knot_days == (1.0, 2.0)
+    with pytest.raises(ValueError, match="FIELD=VALUE"):
+        sr.SearchConfig().override(["no_such_field=1"])
+    with pytest.raises(ValueError, match="knot spacing"):
+        sr.SearchConfig().override(["spline_knot_days=0.2"])

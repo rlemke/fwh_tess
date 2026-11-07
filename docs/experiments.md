@@ -512,3 +512,54 @@ pulsating stars completeness is about half even for strong transits, and a
 better treatment of their variability (a fuller pre-whitening, or a red-noise
 aware SDE) is the lever, not a lower threshold, which the false-alarm test
 shows is already spent on the same stars.
+
+## Pre-whitening v3: more terms, faster periods (2026-11-06)
+
+The injections showed pulsating stars are where completeness is lost, so the
+pre-whitening was tuned on them, then checked on everything. `--set
+FIELD=VALUE` (on `pilot`, `planets` and `inject`) overrides any `SearchConfig`
+field, and `inject --replay` re-searches the identical injected transits, so
+each variant is paired with the default star by star.
+
+**Screen** (69 no-TCE stars whose default search used all three terms, 414
+injections, the same stars inverted, and the 18 TCE-backed planets on
+pre-whitened stars): ten terms instead of three found 68 of 171 injections at
+expected SNR >= 15 against 52; adding periods down to 0.01 d (delta Scuti
+modes under an hour) gave 73; lowering the gate to 1.5 gave 74 with false
+alarms 23 -> 17 of 69. Twenty terms or fifteen gained nothing over ten.
+Extending the period range to 3 d lost 2 of the 18 planets and was dropped.
+
+**Full check, sectors 1-13**, both candidates against the default (pw2):
+
+| | Default | pwA: 10 terms, 0.01 d, gate 1.5 | **pwB: 10 terms, 0.01 d** |
+|---|---|---|---|
+| planets (TCE-backed TOIs) | 682/707 | 681 (+2 −3) | **682 (+1 −1)** |
+| false alarms (inverted, 520 no-TCE stars) | 73 (14.0%) | 57 (11.0%) | 70 (13.5%) |
+| signals on no-TCE stars (normal search) | 70 | 53 | 66 |
+| pilot TCEs recovered | 539/1097 | 519/1098 | 536/1099 |
+| injections found, pulsators, SNR >= 15 | 88/229 | 115 (+38 −11) | **112 (+31 −7)** |
+| injections found, other stars, SNR >= 15 | 1064/1077 | 1058 (+2 −8) | **1065 (+1 −0)** |
+| planet run wall time | 25 min | 25 min | 25 min |
+
+The lower gate removes more false alarms, but it also starts pre-whitening
+quieter stars: 8 injections lost on ordinary stars, a planet net lost, and 8 of
+its 36 lost pilot TCEs are on stars only it pre-whitens, often at the TCE's own
+period (0.604 d TCE, 0.6035 d term removed). pwB keeps the gate at 2, so it
+changes only stars already pre-whitened, and is the new default
+(`prewhiten_max_terms=10`, `prewhiten_min_period_days=0.01`). Every pilot TCE
+either variant loses is a non-TOI signal at 0.25-1.4 d, i.e. variability or a
+contact binary that the pre-whitening now removes as intended.
+
+Completeness with the new default (groups as above, by the default run's
+pre-whitening):
+
+| | 50% found at | 90% found at | found, expected SNR >= 20 |
+|---|---|---|---|
+| all stars | SNR 9.4 (was 9.6) | SNR 19.7 (21.2) | 92.0% (90.1%) |
+| stars without fast variability | 7.9 (7.9) | 11.7 (11.8) | 99.0% (98.8%) |
+| pulsating stars | 24.7 (28.8) | 56.2 (60.6) | 57.9% (47.8%) |
+
+Pulsators remain the weak spot: ~40% of strong transits on them are still
+missed. What is left is not periodic enough to fit with sinusoids
+(amplitude-modulated modes, beating) and needs a red-noise-aware detection
+statistic rather than more terms.
