@@ -63,6 +63,9 @@ Every term, field and outcome — ours and SPOC's `tce_*` columns — is defined
 | `_manifest.py` | which stars the sector observed, from the bucket itself |
 | `pilot.py` | `python -m tesstransit.pilot` — stratified sample → search → match |
 | `inject.py` | `python -m tesstransit.inject` — synthetic transits into the real light curves of a sample run's no-TCE stars → search → recovered or not |
+| `multisector.py` | `python -m tesstransit.multisector` — each sector flattened, then stitched and searched as one light curve (1 d to half the baseline), scored against SPOC's multi-sector TCEs |
+| `vet.py` | `python -m tesstransit.vet` — odd/even, secondary-eclipse and V-shape tests at a signal's ephemeris; thresholds measured on recovered CP/KP planets vs EB TOIs |
+| `ttv.py` | `python -m tesstransit.ttv` — each transit timed on the stitched light curve, O − C against the best fixed period |
 | `planets.py` | `python -m tesstransit.planets` — every TOI in the sector → search → match against the TOI, with each ephemeris forced on our flux |
 | `site.py` | `python -m tesstransit.site` — the stand-alone results page (per-sector figures, period–depth chart, sky map, experiments) from finished runs of any number of sectors; published at rlemke.github.io/facetwork-maps/space/tess-sector1/ |
 | `_match.py` | the TCE table and the matching rules: `recovered` / `recovered_alias` / `missed` (with a cause) / `unmatched` |
@@ -101,6 +104,24 @@ pulsating stars the residual red noise buries the transit. Pre-whitening up
 to ten periodicities down to 0.01 d (tuned on these injections; it was three
 down to 0.05 d) raised strong transits found there from 48% to 58% with the
 same planets found and no change on other stars. Details: `docs/experiments.md`.
+
+## Planet or eclipsing binary?
+
+`vet.py` applies three standard shape tests to a signal: alternating
+odd/even depths, an eclipse at phase 0.5, and a V-shaped dip. Each needs a
+size as well as a significance. The thresholds were measured on the TOIs
+sectors 1-13 recovered, and held up tuned on odd sectors and tested on
+even ones:
+
+| | flagged as binary-like |
+|---|---|
+| confirmed or known planets (CP, KP) | 10 of 405 (2.5%) |
+| TOIs dispositioned EB | 76 of 267 (28%) |
+| planet candidates (PC) | 19 of 385 (4.9%) |
+| signals on stars with no TCE | 18 of 105 (17%) |
+
+Most EB TOIs pass because they are diluted background binaries, which look
+like planets in shape and need a centroid test. Details: `docs/experiments.md`.
 
 ## Tests
 

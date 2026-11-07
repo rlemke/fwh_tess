@@ -588,3 +588,88 @@ stars (beta ~ 1). So the option stays off; it is a false-alarm lever if one is
 needed, not a completeness one. The ~40% of strong transits missed on
 pulsators are, at their real red-noise SNR, mostly below any threshold that
 keeps the false-alarm rate.
+
+## Shape tests: planet or eclipsing binary? (2026-11-06)
+
+`python -m tesstransit.vet` recomputes three tests at our own signal's
+ephemeris on the flattened light curve, for every TOI the sectors 1-13
+planet runs (`s{N}-planets-pwB`) recovered whose TFOPWG disposition is a
+planet (CP, KP) or an eclipsing binary (EB): 672 signals on 639 stars.
+Uncertainties come from the flux binned to the transit duration, so red
+noise is included.
+
+- **odd/even**: mean depth of odd and of even transits; an EB of two similar
+  stars, found at half its period, alternates.
+- **secondary**: the dip at phase 0.5, same duration, with the primary
+  masked first (left in, it pulled the baseline down and every hot Jupiter
+  read as a negative secondary).
+- **V-shape**: full-box depth over central-half depth, ~1 for a flat bottom,
+  2/3 for a pure V.
+
+Significance alone over-flags planets: at 3 sigma, 45 of 403 planets failed
+something, because on a deep hot Jupiter a 2% odd/even difference or a real
+thermal secondary is already significant. Each test therefore also needs a
+SIZE. A grid over the size cuts, capped at 3% of planets flagged, picked
+the same thresholds tuned on odd sectors (tested on even) and on even
+(tested on odd): odd/even > 3 sigma AND > 30% of the depth; secondary > 3
+sigma AND > 5% of the primary; shape ratio < 0.7.
+
+| held-out sectors | planets flagged | EBs flagged |
+|---|---|---|
+| even (tuned on odd) | 4/185 | 36/123 |
+| odd (tuned on even) | 6/218 | 40/142 |
+| all sectors | 10/403 (2.5%) | 76/265 (29%) |
+
+(Four stars first failed with no data at phase 0.5; with that handled, 405
+planets and 267 EBs, the same 10 and 76 flagged.) The secondary eclipse
+does most of the work (58 of the 76). Most EB TOIs
+pass: their median depth is 3,200 ppm against 6,200 ppm for the planets,
+the mark of a binary diluted by a brighter neighbour, whose dip has a
+planet's shape. Telling those apart needs the target pixels (a centroid
+shift), which this search does not read.
+
+Applied to what nobody has labelled: 19 of 385 recovered PC TOIs (4.9%) and
+18 of 105 signals on no-TCE pilot stars (17%) fail a test.
+
+## Planets SPOC's single-sector search did not flag (2026-11-06)
+
+The planet runs search every TOI on a star with a 2-minute light curve,
+including planet-like TOIs with no SPOC TCE in that sector: 1,896 such
+TOI-sectors over sectors 1-13. Most are out of reach in one sector (830 too
+weak at their known ephemeris, 261 with too few transits, 631 outside the
+period grid, 53 single transits). Of those within reach:
+
+| found by | found | missed | |
+|---|---|---|---|
+| QLP only (MIT's FFI pipeline) | 8 | 1 | 89% |
+| SPOC, other searches (other sectors, multi-sector) | 98 | 10 | 91% |
+
+So on planets SPOC's same-sector search did not report, the search does as
+well as on those it did. 200 of the 209 QLP-only TOI-sectors are out of
+reach in one sector, which is what stitching sectors addresses.
+
+## Transit-timing variations: TOI 216 (2026-11-06)
+
+`python -m tesstransit.ttv` times every transit on the stitched sectors
+1-13 light curve (a trapezoid slid across the predicted time, the error
+from chi-square + 1) and fits one fixed period through the times. TOI 216 is
+a pair near 2:1 resonance that the single-sector search missed because its
+transit times wander.
+
+Two traps, both measured on it, are now handled in the code. The
+catalogue ephemeris does not carry back: TOI 216.02's, 58 orbits from
+sectors 1-13, puts every trial time where there is no transit (folded depth
+~0 ppm). So the ephemeris is first refined by a narrow BLS search (±3% in
+period) on this data. And refined alone, 216.02 locked onto 216.01 at half
+its period, so on a multi-planet star the deepest is timed first and its
+transits masked.
+
+| | period (this data) | transits timed | O − C range | timing error | chi² / dof |
+|---|---|---|---|---|---|
+| TOI 216.01 | 34.554 d | 8 | −23 to +22 min | ~1 min | 362 |
+| TOI 216.02 | 17.073 d | 15 | −90 to +56 min | 3-8 min | 100 |
+
+Both curves are smooth over the year and opposite in phase, 216.02 early
+while 216.01 is late: the exchange of energy between two resonant planets,
+the lighter inner one swinging more. No fixed period fits either, which is
+why each looked weak to a fixed-period search in single sectors.
