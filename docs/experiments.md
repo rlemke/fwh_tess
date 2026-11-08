@@ -890,3 +890,45 @@ that lies within 0.5 d of an edge; (2) a both-directions test, a signal whose
 period the inverted search also finds is variability, not a transit.
 Scored afterwards on these stars, only as a guide: the edge rule would leave
 3 of the 12 inverted long-period stars, and inverted 26 → about 17.
+
+### Edge trim and both-directions test: checked afterwards, then fixed in advance
+
+Two options in `SearchConfig`, both off by default: `edge_trim_days` (drop
+data within that much of a segment edge) and `opposite_snr_ratio` (the
+both-directions test; see the field's comment). Re-searched afterwards on
+stars already seen (the 26 + 17 flagged stars without a TCE from the
+250-star run, and every star where `ms-pilot`, `ms-holdout` or `ms-v3`
+recovered a planet TOI or TCE):
+
+| | inverted, of 26 | as observed, of 17 |
+|---|---|---|
+| edge trim 0.5 d | 14 | 13 |
+| both-directions, ratio 0.5 | 16 | 9 |
+| both | 9 | 7 |
+
+What this check found:
+- **The both-directions test needs many events.** TOI 813.01 (3 events at
+  83.8 d) was vetoed: the brightening is the best of ~1,000 trial phases, so
+  noise reached SNR 8 against the dip's 9.7. Now only signals with at least
+  10 events (`opposite_min_events`) are tested; all the variability false
+  alarms were under 5 d.
+- **A ratio of 0.5 is too low.** TOI 787.01 (2.13 d) had a brightening at
+  0.52 of its dip. Scored afterwards: inverted stars left 9/11/13 of 26 at
+  ratios 0.6/0.7/0.8, and known signals kept 54/65/66 of 77. Most of the
+  known signals lost are SPOC TCEs at 0.3-1.7 d with no TOI, the same
+  variability. 0.7 was chosen for its margin above 787.01.
+- **A bug in peak selection, exposed by the trim.** On TOI 802.01, one strong
+  single dip made a peak at every period that put its other transits in
+  gaps, and these 500 neighbouring grid points used up `max_peaks_tried`
+  before the planet's peak was reached ("no_multi_transit_peak"). The budget
+  now counts distinct failed epochs, so 802.01 is found again (SNR 10.1). This
+  changes the default search as well.
+
+**Fixed before running:** `--set edge_trim_days=0.5 --set
+opposite_snr_ratio=0.7` (`opposite_min_events` 10, `opposite_min_repeat_snr` 3)
+on the stitched defaults, on 150 TCE stars + 250 stars without a TCE, none in
+an earlier sample (seed 5, `--holdout-of` all four earlier runs), inverted and
+as observed. Runs `ms-v4-inv`, `ms-v4`; cache `lc_ms_v4`. Adopt as the
+stitched default if (a) at most 15 of 250 stars without a TCE give an inverted
+signal (6%, against 26 of 250 before), and (b) every planet TOI (CP/KP/PC) in
+the grid with at least 3 transits is found.

@@ -115,6 +115,29 @@ class SearchConfig:
     # every event, so the rest still show it. Requires >= 3 events in
     # effect. A vetoed peak has both events masked.
     min_snr_without_two_strongest: float = 0.0
+    # Leave out the first and last edge_trim_days of every stretch of data
+    # (split at gaps > 0.5 d; 0 = off). The spline does not follow the flux
+    # ramp at a segment edge: on 250 stitched quiet stars, 17 of 59 events of
+    # long-period false alarms lay within 0.5 d of an edge, where 9.7% of the
+    # data is, four at the start of sector 7 (experiments.md, 2026-11-07).
+    edge_trim_days: float = 0.0
+    # Both-directions test (0 = off). A transit only dims; periodic stellar
+    # variability is about as bright at its crest as it is faint at its
+    # trough. So fold at the signal's period and find the strongest
+    # BRIGHTENING of the same duration away from the dip: if its SNR is at
+    # least opposite_snr_ratio x the dip's (red-noise SNR) and it is in most
+    # cycles (SNR >= opposite_min_repeat_snr with its two strongest events
+    # left out, so a single flare cannot veto a planet), the signal is
+    # variability and is masked like a found one, but not reported. Measured
+    # reason: 14 of 250 stitched quiet stars gave a 1-2.5 d signal at the same
+    # period in both directions. Only signals with at least
+    # opposite_min_events events are tested: the brightening is the best of
+    # P / (duration / 4) trial phases, so with few events and many phases
+    # noise alone makes one as strong as a real transit (TOI 813.01, 3 events
+    # at 83.8 d: dip SNR 9.7, best brightening 8.0 from ~1,000 phases).
+    opposite_snr_ratio: float = 0.0
+    opposite_min_repeat_snr: float = 3.0
+    opposite_min_events: int = 10
     max_vetoes: int = 5
     # Running-median width as a fraction of the period grid, so the detrended
     # SDE does not depend on how many trials the grid has (1001 of 24000).
@@ -196,6 +219,10 @@ class SearchConfig:
             raise ValueError("min_transits must be >= 1")
         if self.min_snr_without_two_strongest < 0:
             raise ValueError("min_snr_without_two_strongest must be >= 0 (0 = off)")
+        if self.edge_trim_days < 0:
+            raise ValueError("edge_trim_days must be >= 0 (0 = off)")
+        if self.opposite_snr_ratio < 0:
+            raise ValueError("opposite_snr_ratio must be >= 0 (0 = off)")
         if self.max_signals < 1:
             raise ValueError("max_signals must be >= 1")
 
@@ -246,6 +273,10 @@ class Signal:
     snr_red: float | None = None  # combined per-event SNR, red-noise uncertainties
     snr_without_strongest: float | None = None  # the same, strongest event left out
     snr_without_two_strongest: float | None = None  # ... two strongest left out
+    # Both-directions test, when on: the strongest same-duration brightening
+    # at this period (red-noise SNR) and its epoch.
+    opposite_snr: float | None = None
+    opposite_epoch_btjd: float | None = None
 
 
 @dataclass
@@ -260,11 +291,12 @@ class Veto:
     snr_red: float
     snr_without_strongest: float
     strongest_event_btjd: float  # masked before searching again
-    # "without_strongest" | "without_two_strongest"; the second event is
-    # masked too in the second case.
+    # "without_strongest" | "without_two_strongest" (the second event is
+    # masked too) | "opposite" (both-directions test; every event is masked).
     reason: str = "without_strongest"
     snr_without_two_strongest: float | None = None
     second_event_btjd: float | None = None
+    opposite_snr: float | None = None
 
 
 @dataclass
@@ -727,6 +759,52 @@ def event_stats(
     )
 
 
+def near_edges(t: np.ndarray, trim_days: float, gap_days: float = 0.5) -> np.ndarray:
+    """True within ``trim_days`` of the start or end of a stretch of data."""
+    out = np.zeros(len(t), dtype=bool)
+    if trim_days <= 0 or len(t) == 0:
+        return out
+    for sl in _segments(t, gap_days):
+        ts = t[sl]
+        out[sl] = (ts - ts[0] < trim_days) | (ts[-1] - ts < trim_days)
+    return out
+
+
+def opposite_signal(
+    t: np.ndarray, f: np.ndarray, period: float, epoch: float, duration: float
+) -> tuple[float, float, EventStats | None]:
+    """The strongest brightening of ``duration`` at ``period``, away from the dip.
+
+    Returns (red-noise SNR, epoch, its EventStats). Box centres step by a
+    quarter duration over the fold, skipping those within one duration of
+    the dip; the best is then measured event by event, as the dip is.
+    """
+    phase = (t - epoch) % period
+    order = np.argsort(phase)
+    ph, ff = phase[order], f[order]
+    cs = np.concatenate([[0.0], np.cumsum(ff)])
+    step = duration / 4.0
+    centres = np.arange(duration, period - duration + 1e-12, step)
+    if len(centres) == 0:
+        return 0.0, epoch, None
+    lo = np.searchsorted(ph, centres - duration / 2.0)
+    hi = np.searchsorted(ph, centres + duration / 2.0)
+    n = hi - lo
+    ok = n >= 3
+    if not ok.any():
+        return 0.0, epoch, None
+    base = float(np.mean(ff))
+    bright = np.full(len(centres), -np.inf)
+    bright[ok] = ((cs[hi[ok]] - cs[lo[ok]]) / n[ok] - base) * np.sqrt(n[ok])
+    best = float(centres[int(np.argmax(bright))])
+    e2 = epoch + best
+    try:
+        ev = event_stats(t, 2.0 - f, period, e2, duration)
+    except ValueError:
+        return 0.0, e2, None
+    return ev.snr_red, e2, ev
+
+
 def _best_with_transits(
     t: np.ndarray,
     power: np.ndarray,
@@ -736,10 +814,28 @@ def _best_with_transits(
     min_transits: int,
     max_tries: int,
 ) -> int | None:
-    """Index of the strongest peak showing ``min_transits`` transits with data."""
-    for i in np.argsort(power)[::-1][:max_tries]:
-        if _n_transits(t, periods[i], epochs[i], durations[i]) >= min_transits:
+    """Index of the strongest peak showing ``min_transits`` transits with data.
+
+    ``max_tries`` counts DISTINCT failures: one strong single event makes a
+    peak at every period that puts its other transits in gaps, hundreds of
+    neighbouring grid points with the same epoch. Counted one by one they
+    used up the budget before a real planet's peak was reached (TOI 802.01,
+    stitched, with segment edges trimmed). A failure within a duration of an
+    earlier failure's epoch is still checked (a planet can share an epoch
+    with a failed peak) but not counted; at most 20 x ``max_tries`` checks.
+    """
+    fe = np.empty(0)
+    fd = np.empty(0)
+    for n, i in enumerate(np.argsort(power)[::-1]):
+        if n >= 20 * max_tries:
+            break
+        e, d = float(epochs[i]), float(durations[i])
+        if _n_transits(t, periods[i], e, d) >= min_transits:
             return int(i)
+        if not np.any(np.abs(fe - e) < np.maximum(fd, d)):
+            fe, fd = np.append(fe, e), np.append(fd, d)
+            if len(fe) >= max_tries:
+                break
     return None
 
 
@@ -777,7 +873,7 @@ def search(
     )
     durations = np.array(cfg.durations_hours) / 24.0
     chunks = _period_chunks(periods, durations, cfg.min_stellar_density_solar)
-    keep = np.ones(len(time), dtype=bool)
+    keep = ~near_edges(time, cfg.edge_trim_days)
     fields = ("power", "transit_time", "duration", "depth", "depth_snr")
 
     while True:
@@ -890,6 +986,36 @@ def search(
                 if c is not None:
                     keep &= np.abs(time - c) >= cfg.mask_width_factor * dur / 2.0
             continue
+        opp_snr = opp_epoch = None
+        if cfg.opposite_snr_ratio > 0 and len(ev.depths) >= cfg.opposite_min_events:
+            opp_snr, opp_epoch, opp = opposite_signal(
+                time[use], layer.flat[use], p, t0, dur
+            )
+            if (
+                opp is not None
+                and opp_snr >= cfg.opposite_snr_ratio * ev.snr_red
+                and opp.snr_without_two_strongest >= cfg.opposite_min_repeat_snr
+            ):
+                result.vetoes.append(
+                    Veto(
+                        p,
+                        t0,
+                        dur * 24.0,
+                        snr,
+                        sde,
+                        ev.snr_red,
+                        ev.snr_without_strongest,
+                        float(ev.centres[ev.strongest]),
+                        reason="opposite",
+                        snr_without_two_strongest=ev.snr_without_two_strongest,
+                        opposite_snr=opp_snr,
+                    )
+                )
+                if len(result.vetoes) > cfg.max_vetoes:
+                    result.stop_reason = "max_vetoes"
+                    return result
+                keep &= ~_in_transit(time, p, t0, cfg.mask_width_factor * dur / 2.0)
+                continue
         result.signals.append(
             Signal(
                 rank=len(result.signals) + 1,
@@ -903,6 +1029,8 @@ def search(
                 snr_red=ev.snr_red,
                 snr_without_strongest=ev.snr_without_strongest,
                 snr_without_two_strongest=ev.snr_without_two_strongest,
+                opposite_snr=opp_snr,
+                opposite_epoch_btjd=opp_epoch,
             )
         )
         if len(result.signals) >= cfg.max_signals:

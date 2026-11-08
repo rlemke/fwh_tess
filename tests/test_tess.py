@@ -441,6 +441,77 @@ def test_two_event_threshold_must_not_be_negative():
         replace(sr.SearchConfig(), min_snr_without_two_strongest=-1.0).validate()
 
 
+def _flat(seed=1, noise_ppm=300.0):
+    """A sector already flattened: what the stitched search hands search()."""
+    rng = np.random.default_rng(seed)
+    t = np.arange(1325.3, 1352.6, 10.0 / 1440.0)
+    t = t[(t < 1338.5) | (t > 1339.6)]
+    return t, 1.0 + rng.normal(0, noise_ppm * 1e-6, len(t))
+
+
+FLAT = replace(FAST, detrend_method="none")
+
+
+def test_edges_are_marked_per_stretch_of_data():
+    t = np.r_[np.arange(0.0, 5.0, 0.01), np.arange(6.0, 9.0, 0.01)]
+    near = sr.near_edges(t, 0.5)
+    assert near[t < 0.5].all() and near[(t > 4.5) & (t < 5.0)].all()
+    assert near[(t >= 6.0) & (t < 6.5)].all() and near[t > 8.5].all()
+    assert not near[(t > 1.0) & (t < 4.0)].any()
+    assert not sr.near_edges(t, 0.0).any()
+
+
+def test_edge_trim_drops_dips_at_segment_edges():
+    t, f = _flat()
+    for c in (1325.45, 1338.35, 1339.75, 1352.45):  # an edge dip in each segment end
+        f = f + _box(t, 1000.0, c, 3.0, 2500.0)
+    off = sr.search(t, f, 42, 1, FLAT)
+    assert off.signals or off.vetoes, "the edge dips are seen without the trim"
+    on = sr.search(t, f, 42, 1, replace(FLAT, edge_trim_days=0.5))
+    assert not on.signals and not on.vetoes
+
+
+def test_both_directions_test_rejects_sinusoidal_variability():
+    t, f = _flat()
+    f = f + 600e-6 * np.sin(2 * np.pi * t / 1.8)
+    off = sr.search(t, f, 42, 1, FLAT)
+    assert any(abs(s.period_days - 1.8) < 0.02 for s in off.signals)
+    on = sr.search(t, f, 42, 1, replace(FLAT, opposite_snr_ratio=0.5))
+    assert not any(abs(s.period_days - 1.8) < 0.02 for s in on.signals)
+    assert any(v.reason == "opposite" for v in on.vetoes)
+
+
+def test_planet_with_a_flare_survives_the_both_directions_test():
+    t, f = _flat()
+    f = f + _box(t, 3.3, 1326.0, 3.0, 1500.0)
+    f = f + np.where(np.abs(t - 1331.7) < 0.06, 0.02, 0.0)  # one big flare
+    res = sr.search(
+        t, f, 42, 1, replace(FLAT, opposite_snr_ratio=0.5, opposite_min_events=3)
+    )
+    s = res.signals[0]
+    assert abs(s.period_days - 3.3) < 0.02
+    # The flare is the strongest brightening at this period, and as bright as
+    # the transits are deep, but it is ONE event: the repeat test keeps the planet.
+    assert s.opposite_snr is not None and s.opposite_snr > 0.5 * s.snr_red
+    assert not any(v.reason == "opposite" for v in res.vetoes)
+
+
+def test_both_directions_test_skips_signals_with_few_events():
+    # Three events: the best of many trial phases is not evidence of variability.
+    t, f = _flat()
+    f = f + 600e-6 * np.sin(2 * np.pi * t / 1.8)
+    res = sr.search(
+        t, f, 42, 1, replace(FLAT, opposite_snr_ratio=0.5, opposite_min_events=100)
+    )
+    assert any(abs(s.period_days - 1.8) < 0.02 for s in res.signals)
+
+
+def test_new_vetting_options_must_not_be_negative():
+    for name in ("edge_trim_days", "opposite_snr_ratio"):
+        with pytest.raises(ValueError, match=name):
+            replace(sr.SearchConfig(), **{name: -1.0}).validate()
+
+
 def test_final_peak_is_located():
     t, f = _sector(seed=1)
     res = sr.search(t, f, 42, 1, sr.SearchConfig())
