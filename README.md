@@ -144,8 +144,10 @@ planet TOIs (including TOI 1209.01 at 40.7 d). ⚠️ On 250 more stars without 
 TCE, chosen fresh, the inverted rate is 10.4% (7.2-14.8%), lower than a
 single sector's 14% but not clearly so. Half of these false alarms are 1-2.5 d
 stellar variability, found at the same period in both directions. The other
-half are long-period signals whose events sit at data-segment edges. Details:
-`docs/experiments.md`.
+half are long-period signals whose events sit at data-segment edges. A trim of
+the segment edges plus a both-directions test, fixed in advance, kept every
+planet TOI on a fresh sample but still flagged 21 of 250 (8.4%), so neither is
+on by default. Details: `docs/experiments.md`.
 
 ## Tests
 

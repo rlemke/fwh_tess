@@ -932,3 +932,27 @@ as observed. Runs `ms-v4-inv`, `ms-v4`; cache `lc_ms_v4`. Adopt as the
 stitched default if (a) at most 15 of 250 stars without a TCE give an inverted
 signal (6%, against 26 of 250 before), and (b) every planet TOI (CP/KP/PC) in
 the grid with at least 3 transits is found.
+
+**Result (2026-11-08): fails (a), not adopted.** Runs `ms-v4-inv`, `ms-v4`
+(400 stars; one failed, TIC 55497082, with negative PDCSAP flux in sector 13).
+
+| | result | condition |
+|---|---|---|
+| stars without a TCE, inverted signal | **21 / 250** (8.4%, Wilson 5.6-12.5%) | at most 15: **fails** |
+| stars without a TCE, normal signal | 23 / 250 | |
+| planet TOIs in the grid, 3+ transits | 8 / 8 (216.01, 220.01, 723.01, 798.01 at 95.2 d, 794.01, 283.01, 708.01; 801.01 at its 2x alias) | all: passes |
+
+Of the 21 inverted false alarms, 13 are 1.0-1.9 d variability again, most
+of them on stars that also give a signal as observed. The both-directions
+test misses them because their brightening is weaker than their dip: the
+ratio is 0.43-0.70 (median 0.63), just below the 0.7 cut, and TOI 787.01's
+0.52 lies inside that range. A box brightening at the dip's duration does not
+separate this variability from planets. The other 8 are 24-162 d. Whether
+the edge trim helped cannot be told from 8 against the 12 of a different
+250 stars. So both options stay off. The peak-budget fix stays in, since it
+is a bug fix.
+
+The variability left is periodic at 1-2.5 d, just above the 1.5 d where each
+sector's pre-whitening stops. Untested next step: pre-whiten to a longer
+period for the stitched search, judged on planets lost as well as false
+alarms removed.
