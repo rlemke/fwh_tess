@@ -67,7 +67,7 @@ Every term, field and outcome — ours and SPOC's `tce_*` columns — is defined
 | `vet.py` | `python -m tesstransit.vet` — odd/even, secondary-eclipse and V-shape tests at a signal's ephemeris; thresholds measured on recovered CP/KP planets vs EB TOIs |
 | `ttv.py` | `python -m tesstransit.ttv` — each transit timed on the stitched light curve, O − C against the best fixed period |
 | `planets.py` | `python -m tesstransit.planets` — every TOI in the sector → search → match against the TOI, with each ephemeris forced on our flux |
-| `site.py` | `python -m tesstransit.site` — the stand-alone results page (per-sector figures, period–depth chart, sky map, experiments) from finished runs of any number of sectors; published at rlemke.github.io/facetwork-maps/space/tess-sector1/ |
+| `site.py` | `python -m tesstransit.site` — the stand-alone results page (per-sector figures, period–depth chart, sky map, experiments, and with `--stitched` the 13-sector stitched samples with their upside-down false-alarm rate) from finished runs of any number of sectors; published at rlemke.github.io/facetwork-maps/space/tess-sector1/ |
 | `_match.py` | the TCE table and the matching rules: `recovered` / `recovered_alias` / `missed` (with a cause) / `unmatched` |
 | `handlers.py` | the Facetwork steps: `TCETable`, `Targets`, `Plan`, `SearchChunk`, `MatchSector`, `BuildSite` — each a thin layer over the modules above |
 | `ffl/tess.ffl` | facets and workflows (`SectorRun`, `SearchSectors`, `BuildResults`); `ffl/tess_site.ffl` adds `PublishResults` (needs fwh_census_us) |

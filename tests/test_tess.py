@@ -721,6 +721,57 @@ def test_site_page_embeds_data_safely():
     assert "<\\/script><b>x" in page
 
 
+def test_site_stitched_tables_count_planets_once_and_false_alarms_per_star(tmp_path):
+    import csv
+    import json
+
+    from tesstransit import site
+
+    head = ["tic_id", "group", "bucket", "cause", "alias", "tce_id", "tce_period", "tce_snr",
+            "tce_depth_ppm", "sig_rank", "sig_period", "sig_snr", "sig_sde", "sig_depth_ppm",
+            "sig_duration_h", "toi", "toi_disposition"]  # fmt: skip
+
+    def run(name, stars, rows):
+        d = tmp_path / name
+        d.mkdir()
+        (d / "results.jsonl").write_text(
+            "".join(json.dumps({"tic_id": t, "ok": True}) + "\n" for t in stars)
+        )
+        with (d / "matches.csv").open("w", newline="") as fh:
+            w = csv.DictWriter(fh, head, restval="")
+            w.writeheader()
+            w.writerows(rows)
+
+    run("obs", [1, 2, 3, 4], [
+        # TOI 9.01: one TCE missed, another found -> found, counted once
+        {"tic_id": 1, "group": "tce", "bucket": "missed", "cause": "not_detected",
+         "tce_period": "2.0", "toi": "9.01", "toi_disposition": "PC"},
+        {"tic_id": 1, "group": "tce", "bucket": "recovered", "tce_period": "2.0",
+         "sig_period": "2.0", "sig_snr": "12", "sig_sde": "20", "toi": "9.01",
+         "toi_disposition": "PC"},
+        # outside the grid and an EB: both left out of the planets
+        {"tic_id": 2, "group": "tce", "bucket": "missed", "cause": "outside_search_grid",
+         "tce_period": "300", "toi": "8.01", "toi_disposition": "CP"},
+        {"tic_id": 2, "group": "tce", "bucket": "recovered", "tce_period": "1.5",
+         "toi": "7.01", "toi_disposition": "EB"},
+        # two signals on one no-TCE star: one star with a signal, two listed
+        {"tic_id": 3, "group": "quiet", "bucket": "unmatched", "sig_period": "1.1"},
+        {"tic_id": 3, "group": "quiet", "bucket": "unmatched", "sig_period": "50"},
+    ])  # fmt: skip
+    run("inv", [1, 2, 3, 4], [{"tic_id": 4, "group": "quiet", "bucket": "unmatched",
+                               "sig_period": "3.3"}])  # fmt: skip
+    d = site.stitched_rows(tmp_path, [["A", "adopted", "obs", "inv", "yes"],
+                                      ["B", "extra veto", "obs", "inv", "no"]])  # fmt: skip
+    a = d["stitched_samples"][0]
+    assert (a["planets_found"], a["planets_total"]) == ("1", "1")
+    assert (a["quiet_stars"], a["quiet_signal"]) == ("2", "1")  # stars 3 and 4
+    assert (a["inv_stars"], a["inv_signal"], a["inv_pct"]) == ("4", "1", "25.0")
+    assert float(a["inv_lo"]) < 25.0 < float(a["inv_hi"])
+    assert [p["status"] for p in d["stitched_planets"]] == ["Found", "Found"]
+    # signals are listed only for the adopted settings
+    assert len(d["stitched_signals"]) == 2 and {r["sample"] for r in d["stitched_signals"]} == {"A"}
+
+
 def test_tce_backing_pairs_each_toi_with_its_own_tce():
     """L 98-59, sector 2: d's period is 0.94% from 2x c's; d has its own TCE."""
     from tesstransit import planets as pl

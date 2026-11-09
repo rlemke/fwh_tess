@@ -13,6 +13,13 @@ Usage::
 Every row carries its ``sector``; the ``--variant`` detrending scorecards are
 sector-1 experiments.
 
+``--stitched "LABEL|SETTINGS|RUN|INVERTED-RUN|yes"`` adds a sample of the
+13-sector stitched search (``tesstransit.multisector``): the run as observed,
+the same stars with their light curves turned upside down (no real transit
+survives that, so every signal there is a false alarm), and whether the
+settings are the adopted ones. It adds three tables, ``stitched_samples``,
+``stitched_planets`` and ``stitched_signals``; no sky positions are needed.
+
 Writes one self-contained ``index.html``: the data is embedded, and only d3
 and the fonts load from a CDN. It is the same page as the results dashboard,
 over a fixed snapshot of the named runs.
@@ -200,6 +207,95 @@ def variant_rows(
     return out
 
 
+PLANET_DISPOSITIONS = ("CP", "KP", "PC")
+
+
+def _wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    """The Wilson score interval for ``k`` of ``n``, as fractions."""
+    if n == 0:
+        return 0.0, 1.0
+    p = k / n
+    d = 1 + z * z / n
+    c = (p + z * z / (2 * n)) / d
+    h = z * ((p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5) / d
+    return max(0.0, c - h), min(1.0, c + h)
+
+
+def _stitched_run(run: Path) -> tuple[list[dict[str, str]], set[int], set[int]]:
+    """``(matches rows, stars with no TCE, of those the stars with a signal)``."""
+    matches = list(csv.DictReader((run / "matches.csv").open()))
+    tce_stars = {int(r["tic_id"]) for r in matches if r["group"] == "tce"}
+    searched = {
+        json.loads(line)["tic_id"]
+        for line in (run / "results.jsonl").read_text().splitlines()
+        if json.loads(line)["ok"]
+    }
+    quiet = searched - tce_stars
+    with_signal = {int(r["tic_id"]) for r in matches if r["group"] == "quiet"}
+    return matches, quiet, with_signal & quiet
+
+
+def stitched_rows(runs: Path, specs: list[list[str]]) -> dict[str, list[dict[str, str]]]:
+    """The three stitched tables from ``label|settings|run|inverted-run|adopted`` specs.
+
+    A planet is a CP/KP/PC TOI on a sampled star that a TCE or a signal
+    matched (``matches.csv``), counted once per sample: found if any of its
+    rows was recovered (an alias counts) or is a signal SPOC made no TCE for,
+    else missed. TCEs whose period is outside the search grid are left out.
+    """
+    samples, planets, signals = [], [], []
+    for order, (label, settings, run, inv, adopted) in enumerate(specs, 1):
+        matches, quiet, sig = _stitched_run(runs / run)
+        _, inv_quiet, inv_sig = _stitched_run(runs / inv)
+        by_toi: dict[str, dict[str, str]] = {}
+        for r in matches:
+            if r["toi_disposition"] not in PLANET_DISPOSITIONS or r["group"] != "tce":
+                continue
+            if r["cause"] == "outside_search_grid":
+                continue
+            b = r["bucket"]
+            found = b.startswith("recovered") or b == "unmatched"
+            row = {
+                "order": str(order), "sample": label, "toi": r["toi"],
+                "disposition": r["toi_disposition"], "tic_id": r["tic_id"],
+                "period_days": _r(r["tce_period"] or r["sig_period"], 4),
+                "our_period_days": _r(r["sig_period"], 4),
+                "our_snr": _r(r["sig_snr"], 1), "our_sde": _r(r["sig_sde"], 1),
+                "status": ("Found at an alias" if b == "recovered_alias"
+                           else "Found, no SPOC TCE" if b == "unmatched"
+                           else "Found" if found else "Missed"),
+            }  # fmt: skip
+            old = by_toi.get(r["toi"])
+            if old is None or (old["status"] == "Missed" and found):
+                by_toi[r["toi"]] = row
+        planets += by_toi.values()
+        n_found = sum(p["status"] != "Missed" for p in by_toi.values())
+        lo, hi = _wilson(len(inv_sig), len(inv_quiet))
+        samples.append({
+            "order": str(order), "sample": label, "settings": settings,
+            "adopted": "yes" if adopted == "yes" else "no",
+            "quiet_stars": str(len(quiet)), "quiet_signal": str(len(sig)),
+            "inv_stars": str(len(inv_quiet)), "inv_signal": str(len(inv_sig)),
+            "inv_pct": f"{100 * len(inv_sig) / len(inv_quiet):.1f}" if inv_quiet else "",
+            "inv_lo": f"{100 * lo:.1f}", "inv_hi": f"{100 * hi:.1f}",
+            "planets_found": str(n_found) if by_toi else "",
+            "planets_total": str(len(by_toi)) if by_toi else "",
+        })  # fmt: skip
+        if adopted != "yes":
+            continue  # candidates are listed only from the adopted settings
+        for r in matches:
+            if r["group"] != "quiet":
+                continue
+            signals.append({
+                "order": str(order), "sample": label, "tic_id": r["tic_id"],
+                "period_days": _r(r["sig_period"], 4), "depth_ppm": _r(r["sig_depth_ppm"], 0),
+                "duration_hours": _r(r["sig_duration_h"], 1),
+                "our_snr": _r(r["sig_snr"], 1), "our_sde": _r(r["sig_sde"], 1),
+                "toi": r["toi"], "toi_disposition": r["toi_disposition"],
+            })  # fmt: skip
+    return {"stitched_samples": samples, "stitched_planets": planets, "stitched_signals": signals}
+
+
 def render(data: dict[str, Any], built: str) -> str:
     page = files("tesstransit").joinpath("site_template.html").read_text()
     # "</" inside embedded JSON would end the <script> element early.
@@ -228,9 +324,16 @@ def main(argv: list[str] | None = None) -> int:
         "--variant", action="append", default=[], help="sector-1 scorecard row"
     )
     ap.add_argument("--default", default="")
+    ap.add_argument(
+        "--stitched", action="append", default=[],
+        help="stitched sample: label|settings|run|inverted-run|adopted (yes/no)",
+    )  # fmt: skip
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args(argv)
 
+    stitched = [v.split("|") for v in args.stitched]
+    if any(len(v) != 5 for v in stitched):
+        raise SystemExit("--stitched is label|settings|run|inverted-run|adopted")
     variants = [v.split("|") for v in args.variant]
     if any(len(v) != 5 for v in variants):
         raise SystemExit("--variant is name|detrending|planets-run|dev-run|holdout-run")
@@ -262,13 +365,15 @@ def main(argv: list[str] | None = None) -> int:
         "tois": [row for sector, run in planets for row in toi_rows(sector, run, pos)],
         "tce_sample": sample_rows(samples, pos),
         "variants": variant_rows(args.runs, variants, args.default),
+        **stitched_rows(args.runs, stitched),
     }
     built = datetime.now(UTC).strftime("%Y-%m-%d")
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "index.html").write_text(render(data, built))
     print(
         f"{args.out / 'index.html'}: {len(data['tois'])} TOIs, "
-        f"{len(data['tce_sample'])} sample rows, {len(data['variants'])} variants",
+        f"{len(data['tce_sample'])} sample rows, {len(data['variants'])} variants, "
+        f"{len(data['stitched_samples'])} stitched samples",
         file=sys.stderr,
     )
     return 0

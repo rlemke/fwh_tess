@@ -120,6 +120,9 @@
   .tx th { position: sticky; top: 0; background: var(--color-panel); color: var(--color-fg-muted); font-weight: var(--cds-font-weight-medium); }
   .tx .n { text-align: right; }
   .tx tr.is-default td { font-weight: 600; }
+  .tx tr.is-missed td:last-child { color: var(--cds-chart-status-critical); font-weight: 600; }
+  .tx .tx-sub { font-size: var(--cds-font-size-body); font-weight: var(--cds-font-weight-medium); margin: var(--cds-gap-md) 0 0; }
+  .tx .tx-details summary { cursor: pointer; color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); margin-top: var(--cds-gap-md); }
   .tx dl { display: grid; grid-template-columns: minmax(7rem, max-content) 1fr; gap: var(--cds-gap-xs) var(--cds-gap-md); margin: 0; font-size: var(--cds-font-size-caption); }
   .tx dt { font-weight: var(--cds-font-weight-medium); }
   .tx dd { margin: 0; color: var(--color-fg-muted); max-width: 78ch; }
@@ -286,6 +289,70 @@
     </div>
   </section>
 
+  <section class="tx-card" id="stitched" data-draw="stitched-section" data-source="stitched_samples">
+    <h2>Thirteen sectors stitched together</h2>
+    <p class="note">Stars observed in at least 9 of sectors 1–13 were also searched once over the whole year: each sector flattened as above, the sectors joined and binned to 10 minutes, then searched from 1 day to half the baseline (about 180 days). A planet then needs two transits in the year rather than two in one ~27-day sector. Across the samples with TCE stars it found <b data-draw="stpool" data-field="planets_found">—</b> of <b data-draw="stpool" data-field="planets_total">—</b> planets and candidates in its period range, <b data-draw="stpool" data-field="long_found">—</b> of them with periods longer than a sector, which no single-sector search can find (the longest <b data-draw="stpool" data-field="longest">—</b> days).</p>
+    <p class="note">⚠️ <b>Its false-alarm rate is high.</b> Each sample was also searched with every light curve turned upside down, where no real transit survives, so every signal found there is a false alarm. With the adopted settings <b data-draw="stpool" data-field="inv_signal">—</b> of <b data-draw="stpool" data-field="inv_stars">—</b> such stars (<b><span data-draw="stpool" data-field="inv_pct">—</span>%</b>, 95% interval <span data-draw="stpool" data-field="inv_lo">—</span>–<span data-draw="stpool" data-field="inv_hi">—</span>%) gave a signal; as observed, <span data-draw="stpool" data-field="obs_signal">—</span> of <span data-draw="stpool" data-field="obs_stars">—</span> stars with no TCE did (<span data-draw="stpool" data-field="obs_pct">—</span>%), a similar rate. So a stitched signal on a star SPOC made no TCE for is unvetted and most likely a false alarm. Three further tests, each fixed before a fresh sample was run (rejecting edges of data gaps, requiring the dips not to look the same upside down, and rejecting stellar variability at a harmonic of the period), all left more than 6% of upside-down stars with a signal and were not adopted; their samples are shown as run.</p>
+    <div class="tx-wrap">
+      <table data-source="stitched_samples" data-row-key="sample">
+        <thead>
+          <tr>
+            <th data-field="sample">Sample</th>
+            <th data-field="settings">Settings</th>
+            <th class="n" data-field="planets_found">Planets found</th>
+            <th class="n" data-field="planets_total">Planets in range</th>
+            <th class="n" data-field="quiet_signal">No-TCE stars with a signal</th>
+            <th class="n" data-field="quiet_stars">No-TCE stars</th>
+            <th class="n" data-field="inv_signal">Upside down: stars with a signal</th>
+            <th class="n" data-field="inv_pct">Upside down: %</th>
+            <th class="n" data-field="inv_lo">95% interval from</th>
+            <th class="n" data-field="inv_hi">to</th>
+          </tr>
+        </thead>
+        <tbody data-draw="stitched-samples-body"></tbody>
+      </table>
+    </div>
+    <h3 class="tx-sub">Planets and candidates on the sampled stars</h3>
+    <p class="note">Every planet or candidate TOI (CP, KP, PC) that SPOC detected in any of the sectors, or that a stitched signal matched, with its period inside the search range. Period is SPOC's. The two missed are explained in the experiment log: TOI 810.02 is in the data at full depth but its three transits fall just below the detection threshold (SDE 10.4 against 13); TOI 6902.01 is on a very bright star whose detrending residuals are as large as its transits.</p>
+    <div class="tx-wrap">
+      <table data-source="stitched_planets" data-row-key="sample,toi">
+        <thead>
+          <tr>
+            <th data-field="sample">Sample</th>
+            <th data-field="toi">TOI</th>
+            <th data-field="disposition">Disposition</th>
+            <th class="n" data-field="period_days">Period (days)</th>
+            <th class="n" data-field="our_period_days">Period found (days)</th>
+            <th class="n" data-field="our_snr">SNR</th>
+            <th class="n" data-field="our_sde">SDE</th>
+            <th data-field="status">Outcome</th>
+          </tr>
+        </thead>
+        <tbody data-draw="stitched-planets-body"></tbody>
+      </table>
+    </div>
+    <details class="tx-details">
+      <summary>Signals on stars with no TCE, adopted settings (<span data-draw="stpool" data-field="n_signals">—</span>, unvetted)</summary>
+      <p class="note">Listed for completeness, not as candidates: they occur at the same rate as on the upside-down light curves, and none matches a TOI.</p>
+      <div class="tx-wrap">
+        <table data-source="stitched_signals" data-row-key="sample,tic_id,period_days">
+          <thead>
+            <tr>
+              <th data-field="sample">Sample</th>
+              <th class="n" data-field="tic_id">TIC</th>
+              <th class="n" data-field="period_days">Period (days)</th>
+              <th class="n" data-field="depth_ppm">Depth (ppm)</th>
+              <th class="n" data-field="duration_hours">Duration (h)</th>
+              <th class="n" data-field="our_snr">SNR</th>
+              <th class="n" data-field="our_sde">SDE</th>
+            </tr>
+          </thead>
+          <tbody data-draw="stitched-signals-body"></tbody>
+        </table>
+      </div>
+    </details>
+  </section>
+
   <section class="tx-card" id="terms">
     <h2>Terms</h2>
     <dl>
@@ -293,6 +360,9 @@
       <dt>TOI</dt><dd>TESS Object of Interest: a detection human vetters promoted to a candidate, often using several sectors. Dispositions: CP confirmed planet, KP known planet, PC planet candidate, EB eclipsing binary, V variable star, IS instrumental.</dd>
       <dt>Found again</dt><dd>The search reports a signal at the same period (or a simple multiple or fraction of it) whose transits fall at the same times.</dd>
       <dt>Too weak in one sector</dt><dd>Fewer than two transits in the sector, or the transit measured at its known ephemeris on the search's flux is below the detection threshold. Such a TOI was found with more data than one sector.</dd>
+      <dt>SDE</dt><dd>Signal detection efficiency: how far the best peak of the search stands above the other trial periods, in standard deviations. The stitched search tries about 15 times as many periods as one sector, so it requires SDE 13 where one sector requires 11.</dd>
+      <dt>Upside down</dt><dd>The same light curve with brightness inverted about its mean. A real transit becomes a brightening, which the search ignores, so every signal found on an inverted curve is a false alarm: a direct measure of the false-alarm rate on that kind of star.</dd>
+      <dt>Stitched samples</dt><dd>Drawn at random from the stars with 2-minute data in at least 9 of sectors 1–13, each sharing no star with the samples before it. A and B were run with the adopted settings after those settings were fixed; C and D each tested one extra veto, with its pass conditions written down before the run. Samples A, C and D hold 150 stars with SPOC TCEs and 50 or 250 without; B holds 250 without.</dd>
       <dt>Samples</dt><dd>TOI sample: every TOI listing the sector, on a star with a 2-minute light curve there. TCE samples: 60 stars with TCEs, spread across SPOC's signal strength, plus 40 random stars with none. Sector 1 has two (development and a hold-out sharing no star with it); sector 2 has one, run after all tuning was done on sector 1.</dd>
     </dl>
   </section>
@@ -448,6 +518,61 @@
   body('sector-body', 'by_sector',
     ['sector', 'planets_found', 'planets_total', 'confirmed_found', 'confirmed_total', 'notce_found', 'notce_in_data', 'tces_found', 'tces_in_range', 'quiet_signal', 'quiet_stars'],
     ['sector', 'planets_found', 'planets_total', 'confirmed_found', 'confirmed_total', 'notce_found', 'notce_in_data', 'tces_found', 'tces_in_range', 'quiet_signal', 'quiet_stars']);
+  dash.calc('stitched_pooled', {
+    inputs: ['stitched_samples', 'stitched_planets', 'stitched_signals'],
+    title: 'Stitched search pooled',
+    description: 'Planets found over every stitched sample; upside-down false alarms over the samples run with the adopted settings, with a Wilson 95% interval.',
+    fn: (samples, planets, signals) => {
+      samples = samples || []; planets = planets || []; signals = signals || [];
+      const z = 1.96;
+      const wilson = (k, n) => {
+        if (!n) return [0, 1];
+        const p = k / n, d = 1 + (z * z) / n, c = (p + (z * z) / (2 * n)) / d;
+        const h = (z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))) / d;
+        return [Math.max(0, c - h), Math.min(1, c + h)];
+      };
+      const found = planets.filter((r) => r.status !== 'Missed');
+      // A TESS sector spans about 27 days: beyond that, one sector holds at most one transit.
+      const long = found.filter((r) => Number(r.period_days) > 27);
+      const adopted = samples.filter((r) => r.adopted === 'yes');
+      const k = adopted.reduce((a, r) => a + Number(r.inv_signal), 0);
+      const n = adopted.reduce((a, r) => a + Number(r.inv_stars), 0);
+      const [lo, hi] = wilson(k, n);
+      const ko = adopted.reduce((a, r) => a + Number(r.quiet_signal), 0);
+      const no = adopted.reduce((a, r) => a + Number(r.quiet_stars), 0);
+      const pct = (x) => (Math.round(1000 * x) / 10).toFixed(1);
+      return [{
+        planets_found: found.length, planets_total: planets.length, long_found: long.length,
+        longest: long.length ? Math.max(...long.map((r) => Number(r.period_days))).toFixed(1) : '—',
+        inv_signal: k, inv_stars: n, inv_pct: n ? pct(k / n) : '—', inv_lo: pct(lo), inv_hi: pct(hi),
+        obs_signal: ko, obs_stars: no, obs_pct: no ? pct(ko / no) : '—',
+        n_signals: signals.length,
+      }];
+    },
+  });
+  dash.draw('stitched-section', (el) => {
+    const d = dash.data('stitched_samples');
+    el.hidden = !(d.status === 'ok' && d.data.length);
+  });
+  dash.draw('stpool', (el) => {
+    const d = dash.data('stitched_pooled');
+    const v = d.status === 'ok' && d.data.length ? d.data[0][el.dataset.field] : null;
+    el.textContent = v === null || v === undefined ? '—' : String(v);
+  });
+  body('stitched-samples-body', 'stitched_samples',
+    ['sample', 'settings', 'planets_found', 'planets_total', 'quiet_signal', 'quiet_stars', 'inv_signal', 'inv_pct', 'inv_lo', 'inv_hi'],
+    ['planets_found', 'planets_total', 'quiet_signal', 'quiet_stars', 'inv_signal', 'inv_pct', 'inv_lo', 'inv_hi'],
+    (a, b) => Number(a.order) - Number(b.order),
+    (r) => (r.adopted === 'yes' ? 'is-default' : ''));
+  body('stitched-planets-body', 'stitched_planets',
+    ['sample', 'toi', 'disposition', 'period_days', 'our_period_days', 'our_snr', 'our_sde', 'status'],
+    ['period_days', 'our_period_days', 'our_snr', 'our_sde'],
+    (a, b) => Number(a.order) - Number(b.order) || Number(a.period_days) - Number(b.period_days),
+    (r) => (r.status === 'Missed' ? 'is-missed' : ''));
+  body('stitched-signals-body', 'stitched_signals',
+    ['sample', 'tic_id', 'period_days', 'depth_ppm', 'duration_hours', 'our_snr', 'our_sde'],
+    ['tic_id', 'period_days', 'depth_ppm', 'duration_hours', 'our_snr', 'our_sde'],
+    (a, b) => Number(a.order) - Number(b.order) || Number(b.our_sde) - Number(a.our_sde));
   body('missed-body', 'missed_planets',
     ['sector', 'toi', 'disposition', 'period_days', 'depth_ppm', 'forced_snr', 'outcome'],
     ['period_days', 'depth_ppm', 'forced_snr'],
