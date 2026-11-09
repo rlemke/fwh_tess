@@ -1033,3 +1033,28 @@ five earlier runs), inverted and as observed. Runs `ms-v5-inv`, `ms-v5`; cache
 without a TCE give an inverted signal (6%), and (b) every planet TOI
 (CP/KP/PC) in the grid with at least 3 transits is found. If it fails, the
 stitched false-alarm rate stays at ~8-10% and false-alarm work stops here.
+
+**Result (2026-11-09): fails (a) and (b), not adopted.** Runs `ms-v5-inv`,
+`ms-v5` (400 stars, none failed; median 145-158 s per star).
+
+| | result | condition |
+|---|---|---|
+| stars without a TCE, inverted signal | **17 / 250** (6.8%, Wilson 4.3-10.6%) | at most 15: **fails** |
+| stars without a TCE, normal signal | 20 / 250 | |
+| planet TOIs in the grid, 3+ transits | **11 / 13** | all: **fails** |
+
+The veto fired 200 times on the inverted run. Of the 17 inverted false alarms,
+9 are still at 1.1-2.8 d, and 8 are 7.9-95 d; 5 of the 17 stars also give a
+signal as observed. Pooled with the two earlier fresh 250-star samples, the
+stitched inverted rate is 7-10% whatever is switched on, so false-alarm work
+on the stitched search stops here: a stitched signal on a star with no TCE
+is unvetted.
+
+The two planets missed are **not** the veto's doing (no veto fired on either
+star) but a limit of the search grid that earlier samples did not happen to
+contain: TOI 6902.01 (PC, 36.4 d, 5 transits in the data) and TOI 810.02 (PC,
+90.8 d, 3 transits) have 9.3 h and 11.1 h transits, longer than the longest
+box tried (`durations_hours` up to 8 h). On 810.02's star the best peak was at
+90.82 d but at SNR 7.2 / SDE 10.4. Long periods mean long transits (a
+Sun-like star's 90 d planet transits for ~10 h), so the stitched search
+needs longer boxes, at the cost of more trials. Untested.
