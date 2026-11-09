@@ -1091,3 +1091,27 @@ ephemerides shows why: neither miss has anything to do with the box length.
 So longer boxes are not tested on a fresh sample: no planet in hand needs
 them, and coarser knots let more stellar variability through. Whether the
 8 h limit costs planets with much longer transits is not measured.
+
+## Lowering the stitched SDE cut: checked on the earlier samples, not adopted (2026-11-09)
+
+TOI 810.02 misses only the SDE 13 cut, so the question is what a lower cut
+buys. Each stitched result records the peak that stopped the search
+(`final_snr`, `final_sde`, `final_period_days`). A star with no signal whose
+stopping peak has SNR >= 7.1 and SDE between the lower cut and 13 is an upper
+bound on what that cut adds: the peak still has to pass the two-event veto,
+and a cut lower than 13 could also add a second or third signal on a star.
+The planet side is a bound too, since only the stopping peak is recorded.
+Across the four samples run with the adopted stitched settings (`ms-fa250`,
+`ms-v3`, `ms-v4`, `ms-v5`; 799 quiet stars, plus the TCE stars for TOIs):
+
+| cut | quiet stars added, inverted | quiet stars added, as observed | planet TOIs (CP/KP/PC) gained |
+|---|---|---|---|
+| SDE 11 | 59, 10/50, 56, 63 per 250 | 54, 12/50, 43, 54 | 0 |
+| SDE 10 | 96, 19/50, 89, 108 per 250 | 90, 20/50, 84, 101 | 1 (TOI 810.02, SDE 10.4) |
+| SDE 9 | 128, 25/50, 121, 143 per 250 | 123, 25/50, 112, 137 | 1 |
+
+The noise sits just below the cut: inverted, about a quarter of quiet stars
+stop at SDE 11-13 against 7-10% that clear 13, and the as-observed counts are
+the same size, so these are noise peaks, not hidden planets. One planet in
+four samples is not worth even a fraction of that. SDE 13 stays, and no
+fresh sample is run: the bound already decides it.
