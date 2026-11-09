@@ -195,6 +195,26 @@ def test_search_finds_second_planet_after_masking_first():
     assert abs(periods[0] - 3.7) < 0.01 and abs(periods[1] - 8.9) < 0.03
 
 
+def test_search_stops_cleanly_when_masking_leaves_no_out_of_transit_data(monkeypatch):
+    # Seen on an upside-down eclipsing binary (s26, TIC 259006185): accepted 2 h
+    # boxes at a seventh of the orbit masked all but 4 cadences, and the next
+    # peak's per-event statistics raised instead of ending the search.
+    t, f = _sector(planets=[(3.7, 1326.1, 3.0, 1500.0)])
+
+    def no_bins(*_a, **_k):
+        raise sr.TooFewBins("only 3 usable bins of 0.083 d")
+
+    monkeypatch.setattr(sr, "event_stats", no_bins)
+    res = sr.search(t, f, 42, 1, FAST)
+    assert res.signals == []
+    assert res.stop_reason == "too_few_out_of_transit"
+    assert abs(res.final_period_days - 3.7) < 0.01
+    # Any other error still propagates: only the too-little-data case is an ending.
+    monkeypatch.setattr(sr, "event_stats", lambda *a, **k: 1 / 0)
+    with pytest.raises(ZeroDivisionError):
+        sr.search(t, f, 42, 1, FAST)
+
+
 @pytest.mark.parametrize("seed", [1, 4, 10])  # the seeds whose noise peak beat SNR 7.1
 def test_search_on_noise_reports_why_it_stopped(seed):
     # The DEFAULT grid: SDE thresholds are calibrated on it, not on FAST.

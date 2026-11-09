@@ -336,7 +336,7 @@ class SearchResult:
     scatter_ppm: float  # robust (MAD) scatter of the detrended flux
     signals: list[Signal] = field(default_factory=list)
     # "below_threshold" | "max_signals" | "too_few_points" | "no_multi_transit_peak"
-    # | "max_vetoes"
+    # | "too_few_out_of_transit" | "max_vetoes"
     stop_reason: str = ""
     # The strongest peak that did NOT clear the thresholds: how close the search
     # came, and WHERE -- so a missed TCE can be told apart as "found at its
@@ -704,6 +704,10 @@ class EventStats:
     second: int | None = None  # index of the second-strongest event
 
 
+class TooFewBins(ValueError):
+    """Too little data left to measure a binned scatter."""
+
+
 def binned_scatter(t: np.ndarray, f: np.ndarray, width: float) -> float:
     """Robust std of ``f`` averaged in time bins of ``width`` (half-full bins kept).
 
@@ -716,7 +720,7 @@ def binned_scatter(t: np.ndarray, f: np.ndarray, width: float) -> float:
     full = counts >= 0.5 * counts.max()
     means = sums[full] / counts[full]
     if len(means) < 5:
-        raise ValueError(f"only {len(means)} usable bins of {width:.3f} d")
+        raise TooFewBins(f"only {len(means)} usable bins of {width:.3f} d")
     return float(1.4826 * np.median(np.abs(means - np.median(means))))
 
 
@@ -1039,7 +1043,16 @@ def search(
             result.final_period_days, result.final_epoch_btjd = p, t0
             return result
         use = keep & layer.valid
-        ev = event_stats(time[use], layer.flat[use], p, t0, dur)
+        try:
+            ev = event_stats(time[use], layer.flat[use], p, t0, dur)
+        except TooFewBins:
+            # Earlier signals masked nearly all the out-of-transit data (a box
+            # covering a large part of a short period), so this peak's
+            # significance cannot be measured.
+            result.stop_reason = "too_few_out_of_transit"
+            result.final_snr, result.final_sde = snr, sde
+            result.final_period_days, result.final_epoch_btjd = p, t0
+            return result
         fail1 = ev.snr_without_strongest < cfg.min_snr_without_strongest
         fail2 = (
             cfg.min_snr_without_two_strongest > 0

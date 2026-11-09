@@ -119,6 +119,7 @@ set the real false-alarm floor. Both thresholds are open.
 | `max_signals` | `max_signals` reached; there may be more to find. |
 | `too_few_points` | Masking left fewer than 100 cadences. |
 | `max_vetoes` | More than `max_vetoes` peaks were vetoed. |
+| `too_few_out_of_transit` | Earlier signals masked so much of the light curve that fewer than 5 transit-length bins are left outside the next peak's transits, so its per-event statistics cannot be measured. Seen on an upside-down eclipsing binary, where accepted 2 h boxes at a seventh of the orbit masked all but 4 cadences. |
 | `no_multi_transit_peak` | None of the `max_peaks_tried` strongest peaks had `min_transits` transits with data. |
 
 ### 2.6 Per-event depths and red noise
