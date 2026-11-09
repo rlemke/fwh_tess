@@ -1051,10 +1051,43 @@ on the stitched search stops here: a stitched signal on a star with no TCE
 is unvetted.
 
 The two planets missed are **not** the veto's doing (no veto fired on either
-star) but a limit of the search grid that earlier samples did not happen to
-contain: TOI 6902.01 (PC, 36.4 d, 5 transits in the data) and TOI 810.02 (PC,
-90.8 d, 3 transits) have 9.3 h and 11.1 h transits, longer than the longest
-box tried (`durations_hours` up to 8 h). On 810.02's star the best peak was at
-90.82 d but at SNR 7.2 / SDE 10.4. Long periods mean long transits (a
-Sun-like star's 90 d planet transits for ~10 h), so the stitched search
-needs longer boxes, at the cost of more trials. Untested.
+star): TOI 6902.01 (PC, 36.4 d, 9.3 h, 5 transits in the data) and TOI 810.02
+(PC, 90.8 d, 11.1 h, 3 transits). Both transits are longer than the longest
+box tried (8 h), and the first reading of this result blamed that. It is
+wrong; the next section has the check.
+
+## Long transits: the 8 h box is not why TOI 6902.01 and 810.02 are missed (2026-11-09)
+
+The longest box is tied to the detrending: `validate()` requires the spline
+knot spacing to be at least 1.5x the longest duration, so the 0.5 d knots
+allow at most 8 h. Longer boxes need coarser knots, which flatten stellar
+variability less. Both stars were searched again (stitched, sectors 1-13) with
+knots of 1-3 d, first with boxes up to 8 h and then up to 14 h:
+
+| star | knots 1-3 d, boxes to 8 h | knots 1-3 d, boxes to 14 h |
+|---|---|---|
+| TOI 6902.01 as observed | no signal | no signal |
+| TOI 6902.01 inverted | 1.671 d, SNR 24 (false alarm) | no signal |
+| TOI 810.02 as observed | 28.31 d only (TOI 810.01) | 28.31 d only (TOI 810.01) |
+| TOI 810.02 inverted | no signal | no signal |
+
+Longer boxes find neither planet. Folding the stitched curve at the TOI
+ephemerides shows why: neither miss has anything to do with the box length.
+
+- **TOI 810.02** is in the data at full depth: the three transits measure
+  365, 373 and 444 ppm (TOI: 314 ppm), each about SNR 5 against the binned
+  point scatter, about 9.6 combined. The knot spacing makes no difference.
+  The original search's best peak on this star was already at 90.82 d
+  (SNR 7.2, SDE 10.4), below the stitched SDE 13 cut. It is a threshold miss:
+  three transits at SNR 5 each do not clear the look-elsewhere cost of a
+  13-sector period grid.
+- **TOI 6902.01** is not cleanly in the data: the star is very bright
+  (Tmag 5.7) and its five transits measure 31, 118, 14, 94 and 181 ppm with
+  0.5-3 d knots, but -110, 113, 278, 173 and 81 ppm with 1-3 d knots
+  (TOI: 384 ppm; point scatter 96 and 136 ppm). The trend left by detrending
+  is as large as the transit, so no box length recovers it. SPOC found it
+  in a much longer data set (s01-s69).
+
+So longer boxes are not tested on a fresh sample: no planet in hand needs
+them, and coarser knots let more stellar variability through. Whether the
+8 h limit costs planets with much longer transits is not measured.

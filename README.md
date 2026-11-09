@@ -151,10 +151,11 @@ on by default. Nor is a variability veto (a signal is rejected when, with its
 transits masked, a two-sided wave at a harmonic of its period is at least
 half its depth): fixed in advance, it flagged 17 of 250 (6.8%) against the
 15 allowed. So the stitched false-alarm rate stands at about 7-10%: treat a
-stitched signal on a star with no TCE as unvetted. ⚠️ The same sample
-showed that the search misses transits longer than its 8 h maximum box (TOI
-6902.01, 9.3 h at 36.4 d; TOI 810.02, 11.1 h at 90.8 d), which matters most
-at the long periods the stitched search exists for. Details:
+stitched signal on a star with no TCE as unvetted. The two planets that
+sample missed (TOI 810.02 at 90.8 d, TOI 6902.01 at 36.4 d) are not missed
+for their 9-11 h transits: 810.02 is in the data but falls below the SDE 13
+cut, and 6902.01's transits on a very bright star are as large as the
+detrending residuals. Details:
 `docs/experiments.md`.
 
 ## Tests
