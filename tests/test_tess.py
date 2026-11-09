@@ -823,3 +823,37 @@ def test_config_override_parses_by_field_type_and_validates():
         sr.SearchConfig().override(["no_such_field=1"])
     with pytest.raises(ValueError, match="knot spacing"):
         sr.SearchConfig().override(["spline_knot_days=0.2"])
+
+
+def test_variability_veto_rejects_a_weak_coherent_wave():
+    t, f = _flat()
+    f = f + 600e-6 * np.sin(2 * np.pi * t / 1.8)
+    on = sr.search(t, f, 42, 1, replace(FLAT, coherent_veto_fap=1e-10))
+    assert not any(abs(s.period_days - 1.8) < 0.02 for s in on.signals)
+    assert any(v.reason == "coherent" and v.coherent_fap < 1e-10 for v in on.vetoes)
+
+
+def test_variability_veto_keeps_a_planet_on_a_varying_star():
+    t, f = _flat()
+    f = f + _box(t, 3.3, 1326.0, 3.0, 1500.0) + 300e-6 * np.sin(2 * np.pi * t / 0.71)
+    res = sr.search(t, f, 42, 1, replace(FLAT, coherent_veto_fap=1e-10))
+    assert any(abs(s.period_days - 3.3) < 0.01 for s in res.signals)
+    assert not any(v.reason == "coherent" and abs(v.period_days - 3.3) < 0.01 for v in res.vetoes)
+
+
+def test_variability_veto_masks_the_transits_first():
+    # A transit train alone has Lomb-Scargle power at j / P; with the
+    # transits masked there is nothing left to veto it.
+    t, f = _flat()
+    f = f + _box(t, 2.1, 1326.0, 2.0, 800.0)
+    w = sr.coherent_wave(t, f, 2.1, 1326.0, 2.0 / 24.0)
+    assert w is not None and w.fap > 1e-3
+    res = sr.search(t, f, 42, 1, replace(FLAT, coherent_veto_fap=1e-10))
+    assert any(abs(s.period_days - 2.1) < 0.01 for s in res.signals)
+
+
+def test_variability_veto_settings_are_checked():
+    for bad in ({"coherent_veto_fap": -1.0}, {"coherent_veto_fap": 1.0},
+                {"coherent_harmonics": 0}, {"coherent_rel_window": 0.0}):
+        with pytest.raises(ValueError):
+            replace(FAST, **bad).validate()

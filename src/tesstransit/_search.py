@@ -138,6 +138,28 @@ class SearchConfig:
     opposite_snr_ratio: float = 0.0
     opposite_min_repeat_snr: float = 3.0
     opposite_min_events: int = 10
+    # Variability veto (0 = off). Weak stellar variability that keeps its
+    # phase is left in by pre-whitening (under prewhiten_min_red_excess in a
+    # single sector) but adds up over 13 stitched sectors, and BLS reports a
+    # box at its period or a multiple (TIC 167247077: a 0.634 d, ~60 ppm wave
+    # with false-alarm probability 1e-8..1e-18 in sectors that removed
+    # nothing; BLS signal at 1.269 d). So mask the signal's transits and look
+    # for a Lomb-Scargle peak within coherent_rel_window of j / P, j = 1..
+    # coherent_harmonics: the signal is variability if that peak's false-alarm
+    # probability (Baluev, times the number of windows) is under
+    # coherent_veto_fap, its folded shape is two-sided (coherent_min_symmetry,
+    # as in pre-whitening) AND its semi-amplitude is at least
+    # coherent_min_amp_ratio x the box depth -- a planet's host may vary at a
+    # harmonic of the orbit (TOI 708.01: 279 ppm at P/4), but rarely as
+    # strongly as the transit is deep, while variability IS the box. Masking
+    # the transits first matters: a transit train has Lomb-Scargle power at
+    # j / P of its own, which pre-whitening the stitched curve removed (TOI
+    # 787.01, 801.01 lost; experiments.md, 2026-11-08).
+    coherent_veto_fap: float = 0.0
+    coherent_harmonics: int = 4
+    coherent_rel_window: float = 0.005
+    coherent_min_symmetry: float = 0.3
+    coherent_min_amp_ratio: float = 0.5
     max_vetoes: int = 5
     # Running-median width as a fraction of the period grid, so the detrended
     # SDE does not depend on how many trials the grid has (1001 of 24000).
@@ -223,6 +245,10 @@ class SearchConfig:
             raise ValueError("edge_trim_days must be >= 0 (0 = off)")
         if self.opposite_snr_ratio < 0:
             raise ValueError("opposite_snr_ratio must be >= 0 (0 = off)")
+        if not 0 <= self.coherent_veto_fap < 1:
+            raise ValueError("coherent_veto_fap must be in [0, 1) (0 = off)")
+        if self.coherent_harmonics < 1 or self.coherent_rel_window <= 0:
+            raise ValueError("need coherent_harmonics >= 1 and coherent_rel_window > 0")
         if self.max_signals < 1:
             raise ValueError("max_signals must be >= 1")
 
@@ -292,11 +318,13 @@ class Veto:
     snr_without_strongest: float
     strongest_event_btjd: float  # masked before searching again
     # "without_strongest" | "without_two_strongest" (the second event is
-    # masked too) | "opposite" (both-directions test; every event is masked).
+    # masked too) | "opposite" (both-directions test; every event is masked)
+    # | "coherent" (variability veto; every event is masked).
     reason: str = "without_strongest"
     snr_without_two_strongest: float | None = None
     second_event_btjd: float | None = None
     opposite_snr: float | None = None
+    coherent_fap: float | None = None  # reason "coherent" (variability veto)
 
 
 @dataclass
@@ -770,6 +798,66 @@ def near_edges(t: np.ndarray, trim_days: float, gap_days: float = 0.5) -> np.nda
     return out
 
 
+@dataclass
+class CoherentWave:
+    """The strongest Lomb-Scargle peak near j / P with the transits masked."""
+
+    fap: float  # Baluev, times the number of windows searched
+    harmonic: int  # j: the peak is near j / P
+    period_days: float
+    symmetry: float  # min(up/down, down/up) of the folded, binned data
+    semi_amplitude_ppm: float
+
+
+def coherent_wave(
+    time: np.ndarray,
+    flux: np.ndarray,
+    period: float,
+    epoch: float,
+    duration: float,
+    harmonics: int = 4,
+    rel_window: float = 0.005,
+) -> CoherentWave | None:
+    """Is there a periodic wave at a harmonic of ``period`` outside its transits?"""
+    from astropy.timeseries import LombScargle
+
+    phase = (time - epoch + 0.5 * period) % period - 0.5 * period
+    oot = np.abs(phase) > duration
+    if oot.sum() < 100:
+        return None
+    t, r = time[oot], flux[oot] / np.median(flux[oot]) - 1.0
+    ls = LombScargle(t, r)
+    best: tuple[float, int, float] | None = None
+    for j in range(1, harmonics + 1):
+        lo, hi = j / period * (1 - rel_window), j / period * (1 + rel_window)
+        freq = np.linspace(lo, hi, 200)
+        power = ls.power(freq)
+        i = int(np.argmax(power))
+        fap = float(
+            ls.false_alarm_probability(
+                power[i], minimum_frequency=lo, maximum_frequency=hi, method="baluev"
+            )
+        )
+        if best is None or fap < best[0]:
+            best = (fap, j, float(freq[i]))
+    assert best is not None
+    fap, j, fb = best
+    ph = ((t - t[0]) * fb) % 1.0
+    idx = np.minimum((ph * 50).astype(int), 49)
+    counts = np.bincount(idx, minlength=50)
+    binned = np.bincount(idx, weights=r, minlength=50)[counts > 0] / counts[counts > 0]
+    mid = float(np.median(binned))
+    up, down = float(binned.max()) - mid, mid - float(binned.min())
+    sym = up / down if down > 0 else 0.0
+    return CoherentWave(
+        min(1.0, fap * harmonics),
+        j,
+        1.0 / fb,
+        min(sym, 1.0 / sym) if sym > 0 else 0.0,
+        0.5 * (up + down) * 1e6,
+    )
+
+
 def opposite_signal(
     t: np.ndarray, f: np.ndarray, period: float, epoch: float, duration: float
 ) -> tuple[float, float, EventStats | None]:
@@ -1009,6 +1097,42 @@ def search(
                         reason="opposite",
                         snr_without_two_strongest=ev.snr_without_two_strongest,
                         opposite_snr=opp_snr,
+                    )
+                )
+                if len(result.vetoes) > cfg.max_vetoes:
+                    result.stop_reason = "max_vetoes"
+                    return result
+                keep &= ~_in_transit(time, p, t0, cfg.mask_width_factor * dur / 2.0)
+                continue
+        if cfg.coherent_veto_fap > 0:
+            # On every valid point, not just the unmasked ones: masks left by
+            # earlier vetoes at this period sit on the wave's troughs, and
+            # with them gone the fold looks one-sided (measured, synthetic).
+            ok = layer.valid
+            wave = coherent_wave(
+                time[ok], layer.flat[ok], p, t0, dur,
+                cfg.coherent_harmonics, cfg.coherent_rel_window,
+            )
+            if (
+                wave is not None
+                and wave.fap < cfg.coherent_veto_fap
+                and wave.symmetry >= cfg.coherent_min_symmetry
+                and wave.semi_amplitude_ppm
+                >= cfg.coherent_min_amp_ratio * float(res["depth"][i]) * 1e6
+            ):
+                result.vetoes.append(
+                    Veto(
+                        p,
+                        t0,
+                        dur * 24.0,
+                        snr,
+                        sde,
+                        ev.snr_red,
+                        ev.snr_without_strongest,
+                        float(ev.centres[ev.strongest]),
+                        reason="coherent",
+                        snr_without_two_strongest=ev.snr_without_two_strongest,
+                        coherent_fap=wave.fap,
                     )
                 )
                 if len(result.vetoes) > cfg.max_vetoes:

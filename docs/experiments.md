@@ -956,3 +956,80 @@ The variability left is periodic at 1-2.5 d, just above the 1.5 d where each
 sector's pre-whitening stops. Untested next step: pre-whiten to a longer
 period for the stitched search, judged on planets lost as well as false
 alarms removed.
+
+## Short-period variability: why pre-whitening misses it, and a variability veto (2026-11-08)
+
+**Longer per-sector pre-whitening does not help.** Re-searched on stars already
+seen, with `prewhiten_max_period_days` 2.5 or 3.5 instead of 1.5:
+
+| stars without a TCE | default | 2.5 d | 3.5 d |
+|---|---|---|---|
+| 250-star run, inverted | 26 | 24 | 24 |
+| `ms-v4`, inverted | 21 | 19 | 20 |
+| `ms-v4`, as observed | 23 | 17 | 18 |
+
+(2.5 d kept all 30 planet TOIs and 212 of 216 recovered TCEs.) Most of the
+surviving short-period signals, 32 of 77, are under 1.5 d, inside the range
+pre-whitening already covers. On TIC 167247077 (inverted signal at 1.269 d),
+10 of 12 flattened sectors still hold a 0.634 d wave with Lomb-Scargle
+false-alarm probability 1e-8 to 1e-18, and pre-whitening removed nothing in
+them: the wave is ~60 ppm, so the hour-binned scatter stays under twice white
+noise and the red-excess gate stops it. That gate is there to protect
+shallow planets (TOI 396). Stitched, the wave's false-alarm probability is
+1e-59, and BLS fits a box at twice its period.
+
+**Pre-whitening the stitched curve loses planets.** The same tests without the
+red-excess gate, on the stitched curve up to 3 d (not kept): inverted false
+alarms 26 → 11 and 21 → 8, but TOI 787.01 and 801.01 (PC) were lost, with the
+eclipsing binaries TOI 284.01 and 2246.01, and 117 of 216 SPOC TCEs with no
+TOI, nearly all at 1-2 d. What it removed on the planets were harmonics of the
+transit period (787.01: P/4, P/3; 801.01: P/4, P/6). Folded at P/k a shallow
+transit is diluted k times to the noise, and the one-sided test cannot see it.
+Median time per star 210 s (was 120 s).
+
+**A variability veto, measured afterwards.** For each signal, mask its
+transits (± one duration) and find the strongest Lomb-Scargle peak within
+0.5% of j/P, j = 1-4, on the stitched curve. A transit train's own power at
+j/P goes with the masked points; variability stays. Scored on every recorded
+signal of the false-alarm stars and of the recovered TCE stars of all four
+earlier runs (`coh.py`; 311 star runs):
+
+| veto when | false-alarm signals | planet + EB signals | other TCE signals |
+|---|---|---|---|
+| FAP < 1e-4 | 97 / 137 | 17 / 46 | 349 / 374 |
+| FAP < 1e-10, two-sided ≥ 0.3 | 82 / 137 | 6 / 46 | 253 / 374 |
+| … and semi-amplitude ≥ 0.5 × box depth | ~77 / 137 | 1 / 46 | |
+
+The amplitude condition is what separates them: in a false alarm the box IS
+the wave (ratio median ~0.95), while an eclipse is much deeper than any wave
+on its star. The one planet signal lost is TOI 708.01 (PC, 1.996 d), whose
+host varies at P/4 with 279 ppm against a 330 ppm transit: a planet host can
+vary at a harmonic of the orbit, as 787.01's does at P/2. Per star, counting
+a star flagged if any signal is not vetoed (an approximation, since a vetoed
+signal is masked and the search continues): inverted 26 → ~16 (250-star run)
+and 21 → ~12 (`ms-v4`).
+
+Implemented as `coherent_veto_fap` (off by default) with
+`coherent_harmonics` 4, `coherent_rel_window` 0.005, `coherent_min_symmetry`
+0.3, `coherent_min_amp_ratio` 0.5; vetoed signals have reason `"coherent"`
+and are masked like found ones. The wave is measured on every valid point,
+not only those left unmasked: earlier vetoes at the same period mask the
+wave's troughs, and without them the fold looks one-sided (a synthetic
+sinusoid was vetoed three times, then accepted).
+
+Checked on three stars with the implementation: TIC 167247077 inverted gives
+no signal (1.269 d vetoed twice, FAP 1e-29, 1e-34); TOI 787.01 is kept (SNR
+11.3); TOI 708.01 is lost as predicted, and its star then reports a 73.5 d
+signal. There the veto fired six times (1.996 d, then 1.49 d five times),
+exhausting `max_vetoes`: on a strongly varying star, vetoes at the
+variability's period can use up the budget before a planet is reached. The
+fresh sample measures whether that costs planets.
+
+**Fixed before running:** `--set coherent_veto_fap=1e-10` on the stitched
+defaults (edge trim and both-directions test off), on 150 TCE stars + 250
+stars without a TCE, none in an earlier sample (seed 6, `--holdout-of` all
+five earlier runs), inverted and as observed. Runs `ms-v5-inv`, `ms-v5`; cache
+`lc_ms_v5`. Adopt as the stitched default if (a) at most 15 of 250 stars
+without a TCE give an inverted signal (6%), and (b) every planet TOI
+(CP/KP/PC) in the grid with at least 3 transits is found. If it fails, the
+stitched false-alarm rate stays at ~8-10% and false-alarm work stops here.
