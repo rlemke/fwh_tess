@@ -13,8 +13,10 @@ alone. Signals with no TCE are **unvetted** and are never reported as planets.
 
 ## Status
 
-Sectors 1–13 searched. Of the planets and candidates SPOC detected in the same
-sector, **682 of 707 (96.5%)** are found again. Results page:
+Sectors 1–26 searched (the first two years). Of the planets and candidates
+SPOC detected in the same sector, **682 of 707 (96.5%)** are found again in
+sectors 1–13 and **670 of 696 (96.3%)** in sectors 14–26, which were searched
+with nothing tuned on them. The results page shows sectors 1–13:
 <https://rlemke.github.io/facetwork-maps/space/tess-sector1/>.
 
 A Facetwork domain (`tess`): the command-line tools and the FFL workflows run
@@ -84,7 +86,9 @@ stars without a TCE are, as a group, what false alarms alone produce. Most are
 periodic variability under a day that survives pre-whitening, not white
 noise, and a stricter cut costs planets faster than it removes them (SDE 14,
 measured with the earlier three-term pre-whitening: 9.8% false alarms, 92.9%
-of planets). Details: `docs/experiments.md`.
+of planets). Sectors 14–26, untuned, give the same picture: 11.3%
+(8.9–14.4%) upside down against 11.7% as observed. Details:
+`docs/experiments.md`.
 
 ## Completeness is measured
 

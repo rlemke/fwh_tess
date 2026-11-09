@@ -1115,3 +1115,49 @@ stop at SDE 11-13 against 7-10% that clear 13, and the as-observed counts are
 the same size, so these are noise peaks, not hidden planets. One planet in
 four samples is not worth even a fraction of that. SDE 13 stays, and no
 fresh sample is run: the bound already decides it.
+
+## Sectors 14-26: the second year, untuned (2026-11-09)
+
+The second year (northern ecliptic hemisphere) was searched with the
+single-sector default unchanged: nothing was tuned on it. Per sector, the
+same three runs as for sectors 1-13: every TOI on a 2-minute star
+(`s{N}-planets-pwC`), the 60 TCE + 40 quiet sample (`s{N}-pilot-pwC`), and
+that sample upside down (`s{N}-pilot-inv-pwC`). SPOC TCE tables
+`s0014`-`s0026`, 726-1,591 TCEs each; TOI table as of 2026-11-04.
+
+Sectors 1-13 were re-run on the same code first, since the
+`_best_with_transits` fix came after their published runs (`pwB`): 4 of
+5,215 star searches changed, all on TCE stars (two that used to raise now
+finish, two eclipsing binaries gain a signal), and every pooled number
+below is identical. So the published sector 1-13 figures stand and the two
+years are compared on one code version.
+
+| | sectors 1-13 | sectors 14-26 |
+|---|---|---|
+| planet TOIs (CP/KP/PC) with a TCE in the sector, found | 682/707 = 96.5% (94.8-97.6) | 670/696 = 96.3% (94.6-97.4) |
+| planet TOIs with no TCE in the sector, found | 108 | 165 |
+| ... of those detectable in the sector (found + not detected + exhausted) | 108/120 | 165/184 |
+| sample TCEs found (incl. aliases) | 536/1,125 | 627/1,136 |
+| quiet stars with a signal | 66/520 = 12.7% | 61/520 = 11.7% |
+| quiet stars with a signal, upside down | 70/520 = 13.5% (10.8-16.7) | 59/520 = 11.3% (8.9-14.4) |
+
+The second year reproduces the first within the intervals. The larger
+no-TCE count is volume: 2,382 planet TOIs list a year-2 sector with no TCE
+from it, against 1,896; most are too weak in one sector either way
+(1,515 and 1,091 below the forced-SNR or transit-count bar). The
+false-alarm conclusion is unchanged: signals on no-TCE stars occur at the
+rate the upside-down search produces, so they are not candidates.
+
+Per sector, planets with a TCE missed: 1-5 (sector 20: 5 of 55; sector 21:
+4 of 60). Causes are the year-1 ones: weak after detrending (14), not
+detected (10), one search that ran out of signal slots, and one TOI too weak
+even at its own ephemeris (forced SNR below the bar).
+
+Two stars failed. TIC 232564158 (sector 16) has a negative median PDCSAP
+flux and is rightly refused, as TIC 300038935 is in sector 4. TIC 259006185
+(sector 26, a 2.5% eclipsing binary with TCEs) failed only upside down: the
+inverted eclipses drew 2 h boxes at 0.277 d, a seventh of the 1.94 d orbit,
+and after two accepted signals only 4 cadences lay outside the next peak's
+transits, so `event_stats` raised. The search now stops with
+`too_few_out_of_transit` (fwh_tess c63b205); the sector 26 inverted run was
+repeated, and its quiet-star count is unchanged (10/40).
