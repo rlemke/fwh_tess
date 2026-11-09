@@ -16,7 +16,7 @@ alone. Signals with no TCE are **unvetted** and are never reported as planets.
 Sectors 1–26 searched (the first two years). Of the planets and candidates
 SPOC detected in the same sector, **682 of 707 (96.5%)** are found again in
 sectors 1–13 and **670 of 696 (96.3%)** in sectors 14–26, which were searched
-with nothing tuned on them. The results page shows sectors 1–13:
+with nothing tuned on them. The results page shows all 26:
 <https://rlemke.github.io/facetwork-maps/space/tess-sector1/>.
 
 A Facetwork domain (`tess`): the command-line tools and the FFL workflows run
