@@ -49,6 +49,16 @@ def test_eligible_counts_sectors_per_star():
     assert ms.eligible(m, 3) == {10: {1: "a", 2: "c", 3: "d"}}
 
 
+def test_paired_sample_regroups_against_the_new_table_and_counts_drops():
+    from tesstransit import _match as mt
+
+    tces = [mt.TCE("1-01", 30, 1, 5.0, 0.0, 2.0, 500.0, 9.0, 3)]
+    stars = {10: {1: "a"}, 30: {1: "b"}, 40: {1: "c"}}
+    # 30 was quiet in the earlier run but has a TCE now; 20 lost its data.
+    tce, quiet, dropped = ms.paired_sample(frozenset({10, 20, 30, 40}), tces, stars)
+    assert (tce, quiet, dropped) == ([30], [10, 40], [20])
+
+
 def test_stitched_defaults_differ_from_single_sector_only_where_declared():
     single = sr.SearchConfig()
     cfg = ms.base_config()

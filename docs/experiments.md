@@ -1161,3 +1161,59 @@ and after two accepted signals only 4 cadences lay outside the next peak's
 transits, so `event_stats` raised. The search now stops with
 `too_few_out_of_transit` (fwh_tess c63b205); the sector 26 inverted run was
 repeated, and its quiet-star count is unchanged (10/40).
+
+## Sectors 27-39: the third year, untuned (2026-11-10)
+
+The southern hemisphere again, two years after sectors 1-13, searched with
+the single-sector default unchanged (`s{N}-{planets,pilot,pilot-inv}-pwC`).
+SPOC TCE tables `s0027`-`s0039`, 909-2,287 TCEs each; TOI table as of
+2026-11-04.
+
+| | sectors 1-13 | sectors 14-26 | sectors 27-39 |
+|---|---|---|---|
+| planet TOIs (CP/KP/PC) with a TCE in the sector, found | 682/707 = 96.5% | 670/696 = 96.3% | 1,341/1,383 = 97.0% (95.9-97.7) |
+| planet TOIs with no TCE in the sector, found | 108 | 165 | 203 |
+| ... of those detectable in the sector | 108/120 | 165/184 | 203/236 |
+| sample TCEs found (incl. aliases) | 536/1,125 | 627/1,136 | 606/1,091 |
+| quiet stars with a signal | 66/520 = 12.7% | 61/520 = 11.7% | 81/520 = 15.6% |
+| quiet stars with a signal, upside down | 70/520 = 13.5% (10.8-16.7) | 59/520 = 11.3% (8.9-14.4) | 93/520 = 17.9% (14.8-21.4) |
+
+Planet recovery holds; the year has twice the planet TOIs per sector of the
+first two (the TOI catalogue grew). The 42 misses: weak after detrending
+(16), not detected (14), outside the search grid (12, about one a sector).
+Two stars are refused for a negative median PDCSAP flux (TIC 264979636 in
+sector 34, TIC 447061717 in sector 37).
+
+⚠️ **The upside-down rate rose**, 17.9% against 11-13%, outside both
+earlier intervals; per sector 4-12 of 40 (highest: sectors 32, 34, 38).
+Observed and inverted still agree (15.6% vs 17.9%), so the conclusion that
+no-TCE signals are false alarms as a group stands, but the cause is not yet
+known. Unchecked candidates: year-3 2-minute targets chosen more often for
+variability, or a processing change. Not investigated before travel.
+
+## Sectors 1-13 + 27-39 stitched: a paired run (in progress, 2026-11-10)
+
+The same stars as the published stitched samples (`ms-v3`, `ms-fa250`),
+re-searched with both southern years, so the comparison is paired, not two
+draws. New option `multisector --sample-of RUN` (repeatable) searches an
+earlier run's stars, re-grouped against the NEW TCE table (a star quiet in
+sectors 1-13 can have a sectors 1-39 TCE) and counts the stars no longer
+eligible instead of replacing them.
+
+- Reference: SPOC's sectors 1-39 multi-sector TCEs
+  (`tess2018206190142-s0001-s0039_dvr-tcestats.csv`, 9,699 TCEs). It also
+  searched sectors 14-26, which these southern stars barely touch.
+- Eligibility: 2-minute data in at least 18 of the 26 sectors: 3,311 stars.
+  Of the 6,911 stars with 9+ sectors in year 1, 3,593 have **no** 2-minute
+  data in year 3 (targets are re-chosen each sector). 216 of the 450 sampled
+  stars remain: 81 with a TCE, 135 without.
+- Cost: baseline ~1,064 d, ~81,500 binned points, ~3.7x the periods. One
+  star took 28.7 min against 2.3 min for sectors 1-13 (12x); the run of 216
+  took ~11 h on 12 workers.
+- Runs: `ms26-pair` (observed), then `ms26-pair-inv` (the 135 quiet-sample
+  stars upside down; not yet run). The driver skips a run whose
+  `summary.json` exists, so re-running it resumes at the inverted run.
+  ⚠️ A run writes its results only at the end; an interrupted run starts
+  over.
+
+Results: pending.

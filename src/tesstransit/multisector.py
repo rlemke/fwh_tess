@@ -21,6 +21,9 @@ The reference is SPOC's multi-sector search over the same sectors
 (``<stamp>-s0001-s0013_dvr-tcestats.csv``), scored with the same matcher, so
 the numbers are comparable with the single-sector pilot's.
 
+``--sample-of RUN`` re-searches an earlier run's stars (e.g. sectors 1-13
+stars over 1-13 + 27-39), a paired comparison rather than a new draw.
+
 ⚠️ Declared limits: durations stop at 8 h (the 0.5 d spline knots), so
 long-period planets around large stars are searched with too short a box;
 and a planet whose transits fall in only one sector is a single event here,
@@ -194,6 +197,26 @@ def eligible(
     return {k: v for k, v in by_star.items() if len(v) >= min_sectors}
 
 
+def paired_sample(
+    prior: frozenset[int], tces: list[mt.TCE], stars: dict[int, dict[int, str]]
+) -> tuple[list[int], list[int], list[int]]:
+    """The stars of earlier runs, re-grouped against THIS run's TCE table.
+
+    ``(tce_stars, quiet_stars, dropped)``: a star with a TCE in the new table
+    is a TCE star even if it was quiet before (a longer baseline can give
+    SPOC a TCE it did not have), and a star no longer eligible is dropped and
+    counted, never silently replaced.
+    """
+    with_tce = {t.tic_id for t in tces}
+    kept = sorted(t for t in prior if t in stars)
+    dropped = sorted(t for t in prior if t not in stars)
+    return (
+        [t for t in kept if t in with_tce],
+        [t for t in kept if t not in with_tce],
+        dropped,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--sectors", required=True, help='e.g. "1-13"')
@@ -214,6 +237,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--holdout-of", type=Path, action="append", default=[],
         help="earlier run dir(s): draw a sample sharing none of their stars",
+    )  # fmt: skip
+    ap.add_argument(
+        "--sample-of", type=Path, action="append", default=[],
+        help="earlier run dir(s): search the SAME stars (a paired comparison)",
     )  # fmt: skip
     ap.add_argument("--invert", action="store_true", help="false-alarm run (2 - flux)")
     ap.add_argument(
@@ -236,9 +263,16 @@ def main(argv: list[str] | None = None) -> int:
     }
     stars = eligible(manifests, args.min_sectors)
     tces = mt.parse_tce_csv(args.tce_csv.read_text())
-    tce_stars, quiet, unobserved = select_sample(
-        tces, stars, args.n_tce, args.n_quiet, args.seed, stars_of(args.holdout_of)
-    )
+    dropped: list[int] = []
+    if args.sample_of:
+        if args.holdout_of:
+            raise SystemExit("--sample-of and --holdout-of are opposites")
+        tce_stars, quiet, dropped = paired_sample(stars_of(args.sample_of), tces, stars)
+        unobserved = sorted({t.tic_id for t in tces} - set(stars))
+    else:
+        tce_stars, quiet, unobserved = select_sample(
+            tces, stars, args.n_tce, args.n_quiet, args.seed, stars_of(args.holdout_of)
+        )
     print(
         f"{len(stars)} stars with 2-min data in >= {args.min_sectors} of sectors "
         f"{args.sectors}; sample {len(tce_stars)} TCE + {len(quiet)} quiet",
@@ -308,6 +342,8 @@ def main(argv: list[str] | None = None) -> int:
         "bin_minutes": args.bin_minutes,
         "sample": {"tce_stars": len(tce_stars), "quiet_stars": len(quiet), "failed": failed},
         "holdout_of": [str(p) for p in args.holdout_of],
+        "sample_of": [str(p) for p in args.sample_of],
+        "sample_of_not_eligible": dropped,
         "tce_stars_not_eligible": len(unobserved),
         "tces_in_sample": len(sampled),
         "tce_group": mt.summarise([r for r in rows if r.tic_id in tce_set]),

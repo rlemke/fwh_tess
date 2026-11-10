@@ -13,10 +13,11 @@ alone. Signals with no TCE are **unvetted** and are never reported as planets.
 
 ## Status
 
-Sectors 1–26 searched (the first two years). Of the planets and candidates
+Sectors 1–39 searched (the first three years). Of the planets and candidates
 SPOC detected in the same sector, **682 of 707 (96.5%)** are found again in
-sectors 1–13 and **670 of 696 (96.3%)** in sectors 14–26, which were searched
-with nothing tuned on them. The results page shows all 26:
+sectors 1–13, **670 of 696 (96.3%)** in sectors 14–26 and **1,341 of 1,383
+(97.0%)** in sectors 27–39; the last two were searched with nothing tuned on
+them. The results page shows sectors 1–26:
 <https://rlemke.github.io/facetwork-maps/space/tess-sector1/>.
 
 A Facetwork domain (`tess`): the command-line tools and the FFL workflows run
@@ -87,7 +88,9 @@ periodic variability under a day that survives pre-whitening, not white
 noise, and a stricter cut costs planets faster than it removes them (SDE 14,
 measured with the earlier three-term pre-whitening: 9.8% false alarms, 92.9%
 of planets). Sectors 14–26, untuned, give the same picture: 11.3%
-(8.9–14.4%) upside down against 11.7% as observed. Details:
+(8.9–14.4%) upside down against 11.7% as observed. Sectors 27–39 agree
+(17.9% upside down, 15.6% observed), but the rate itself is higher than in
+either earlier year, for a reason not yet found. Details:
 `docs/experiments.md`.
 
 ## Completeness is measured
