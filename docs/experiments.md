@@ -1191,7 +1191,7 @@ no-TCE signals are false alarms as a group stands, but the cause is not yet
 known. Unchecked candidates: year-3 2-minute targets chosen more often for
 variability, or a processing change. Not investigated before travel.
 
-## Sectors 1-13 + 27-39 stitched: a paired run (in progress, 2026-11-10)
+## Sectors 1-13 + 27-39 stitched: a paired run (2026-11-10)
 
 The same stars as the published stitched samples (`ms-v3`, `ms-fa250`),
 re-searched with both southern years, so the comparison is paired, not two
@@ -1209,11 +1209,28 @@ eligible instead of replacing them.
   stars remain: 81 with a TCE, 135 without.
 - Cost: baseline ~1,064 d, ~81,500 binned points, ~3.7x the periods. One
   star took 28.7 min against 2.3 min for sectors 1-13 (12x); the run of 216
-  took ~11 h on 12 workers.
+  took 12.2 h on 12 workers.
 - Runs: `ms26-pair` (observed), then `ms26-pair-inv` (the 135 quiet-sample
   stars upside down; not yet run). The driver skips a run whose
   `summary.json` exists, so re-running it resumes at the inverted run.
   ⚠️ A run writes its results only at the end; an interrupted run starts
   over.
 
-Results: pending.
+Results (`ms26-pair`, observed; same stars, earlier result from `ms-v3` /
+`ms-fa250`):
+
+| same stars | sectors 1-13 | sectors 1-13 + 27-39 |
+|---|---|---|
+| planet TOIs (CP/KP/PC) found | 8/9 | 9/9 |
+| quiet stars (no s1-39 TCE) with a signal | 5/135 = 3.7% | **26/135 = 19.3%** |
+
+- The added planet is TOI 199.01 (SPOC period 314.6 d), found at a third of
+  its period (104.9 d, an alias). At 314.6 d it cannot be found in sectors
+  1-13, whose search stops at half the ~350 d baseline.
+- ⚠️ False alarms rose five-fold on the same stars. The search tries ~3.7x
+  the periods of the 1-13 search, and SDE 13 was set on the 1-13 search, so
+  the threshold does not carry over to a longer baseline. The inverted run
+  (`ms26-pair-inv`, 135 quiet stars) has not been run; it is the test of
+  whether these 26 are noise. Until then the 26-sector stitch is NOT
+  adopted, and nothing from it goes on the site. Next: the inverted run,
+  then an SDE cut set on it and checked on a fresh sample.
