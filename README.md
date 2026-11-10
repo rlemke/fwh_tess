@@ -17,7 +17,7 @@ Sectors 1–39 searched (the first three years). Of the planets and candidates
 SPOC detected in the same sector, **682 of 707 (96.5%)** are found again in
 sectors 1–13, **670 of 696 (96.3%)** in sectors 14–26 and **1,341 of 1,383
 (97.0%)** in sectors 27–39; the last two were searched with nothing tuned on
-them. The results page shows sectors 1–26:
+them. The results page shows all 39:
 <https://rlemke.github.io/facetwork-maps/space/tess-sector1/>.
 
 A Facetwork domain (`tess`): the command-line tools and the FFL workflows run
