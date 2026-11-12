@@ -1234,3 +1234,76 @@ Results (`ms26-pair`, observed; same stars, earlier result from `ms-v3` /
   whether these 26 are noise. Until then the 26-sector stitch is NOT
   adopted, and nothing from it goes on the site. Next: the inverted run,
   then an SDE cut set on it and checked on a fresh sample.
+
+### The inverted paired run, and an SDE cut set on it (2026-11-12)
+
+`ms26-pair-inv`: the quiet-sample stars upside down, 104 of the 135 (the
+rest have too few sectors once `ms-fa250` is re-grouped; 10 TCE stars ride
+along). 6.8 h on 12 workers, no failures.
+
+Upside down, **25 of 104 quiet stars (24.0%)** carry a signal, against
+26/135 (19.3%) as observed. The rise on the 26-sector stitch is therefore
+noise the longer period grid finds, not hidden planets, and SDE 13 does
+not carry over. A higher cut, applied to the strongest (rank-1) signal of
+each star, which is where the search stops at that cut:
+
+| cut | quiet stars with a signal, upside down | as observed |
+|---|---|---|
+| SDE 13 (current) | 25/104 = 24.0% | 26/135 = 19.3% |
+| SDE 15 | 13/104 = 12.5% | 14/135 = 10.4% |
+| SDE 16 | 10/104 = 9.6% | 11/135 = 8.1% |
+| SDE 17 | 9/104 = 8.7% | 10/135 = 7.4% |
+| **SDE 18** | **7/104 = 6.7%** | **7/135 = 5.2%** |
+| SDE 20 | 6/104 = 5.8% | 6/135 = 4.4% |
+
+All 9 planet TOIs on these stars are found at SDE 29 or more (the weakest
+is TOI 802.01 at 29.2), so none is lost up to SDE 29. SDE 18 brings the
+false-alarm rate below the adopted 13-sector stitch (10.4% on 250 fresh
+stars) and is the proposed cut. It was chosen on this sample, so it is
+tested on a fresh one before anything changes: `ms26-fresh` (40 TCE + 100
+quiet stars sharing no star with any earlier stitched run, seed 26,
+`--set sde_threshold=18`), then `ms26-fresh-inv`
+(`scripts/run_ms26_fresh.sh`). ⚠️ Nine planets say little about what a
+cut of 18 costs on weaker planets; the fresh run's 40 TCE stars are the
+check.
+
+## Why the third year has more false alarms (2026-11-12)
+
+Sectors 27-39 gave 93/520 quiet stars with a signal upside down (17.9%)
+against 70 and 59 (13.5%, 11.3%). Four checks:
+
+1. **Noise level explains a little.** Year-3 quiet stars are noisier
+   (median scatter 1,462 ppm vs 1,105 and 1,274). Applying the year 1+2
+   false-alarm rate per scatter quartile to the year-3 mix predicts 66
+   stars, not 93.
+2. **The excess is short-period, same-period repeats.** Year 3 has 129
+   signals below 1 d (73, 59 in years 1-2), most at 0.25-0.4 d, and 26 stars
+   whose signals repeat one period within 1% (11, 12): masking the first
+   "transit" leaves the same period behind, so the source is continuous
+   variability, not dips. Without those stars the rates are 12.9%, 11.3%,
+   9.0%.
+3. **A repeat-period veto would cost planets.** Real planets repeat too
+   (the residual of a deep transit): of the TCE-backed planet TOIs
+   recovered, 18/661, 10/654 and 45/1,296 sit on a star whose signals repeat
+   at the planet's period. Not adopted.
+4. **The same stars in year 1 do no better: it is the targets, not the
+   data.** 205 of the 520 year-3 quiet stars also had 2-minute data in year
+   1. Searched in their year-1 sector (the matching sector, sector − 26,
+   where they had it) with the identical recorded configuration:
+
+   | same 205 stars | year 1 | year 3 |
+   |---|---|---|
+   | upside down, with a signal | 41 = 20.0% | 34 = 16.6% (discordant 17 vs 10, sign test p = 0.25) |
+   | as observed, with a signal | 42 = 20.5% | 31 = 15.1% (24 vs 13, p = 0.10) |
+   | median scatter | 808 ppm | 823 ppm |
+
+   A processing or instrument change would make year 3 worse on the same
+   stars; it is not. Stars kept on the 2-minute target list across years
+   are a higher-false-alarm population in either year (20% vs 13.5% for the
+   year-1 sample overall), and the stars new in year 3 are noisier (median
+   1,874 ppm, 18.7% upside down). The rise is a change in which stars got
+   2-minute cadence. Observed and inverted rates still agree in every year,
+   so the conclusion that no-TCE signals are false alarms as a group is
+   unchanged, and nothing on the site changes. (Scratch driver: reuses
+   `pilot._search_one` with each star's recorded `SearchConfig`.)
+
