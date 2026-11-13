@@ -1291,8 +1291,11 @@ nine are the evidence there.
 Adopted: a stitch whose sectors span 14 or more sector numbers (more than a
 year) now defaults to SDE 18 (`LONG_STITCH_SDE` in `multisector.py`); a
 13-sector stitch keeps SDE 13; `--set sde_threshold=` still overrides.
-⚠️ Validated only on the 1-13 + 27-39 layout; a contiguous two-year stitch
-(1-26) has not been tested at either cut.
+⚠️ Validated on years 1 + 3 (south) only. A contiguous two-year stitch
+cannot occur: of the 232,557 stars with 2-min data in sectors 1-26, none
+has sectors more than a year apart (year 1 looked south, year 2 north; at
+most 13 sectors per star). A stitch longer than a year is always alternate
+years, so the untested case is years 2 + 4 (north, sectors 14-26 + 40-55).
 
 ## Why the third year has more false alarms (2026-11-12)
 

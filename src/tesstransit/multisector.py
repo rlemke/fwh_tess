@@ -133,7 +133,9 @@ STITCHED_DEFAULTS: dict[str, Any] = {
 # ~3x the periods again. At SDE 13 the inverted curves of 25 of 104 quiet
 # stars gave a signal (ms26-pair-inv); SDE 18, fixed before a fresh sample
 # (seed 26), gave 7 of 100, and all 9 planets of the paired 26-sector run
-# have SDE >= 18. Validated only on that 1-13 + 27-39 layout.
+# have SDE >= 18. Validated on years 1 + 3 (south). No star's 2-min data in
+# sectors 1-26 spans more than a year (year 1 south, year 2 north), so a long
+# stitch is always alternate years; years 2 + 4 (north) is untested.
 LONG_STITCH_SECTOR_SPAN = 14
 LONG_STITCH_SDE = 18.0
 
