@@ -1267,6 +1267,33 @@ quiet stars sharing no star with any earlier stitched run, seed 26,
 cut of 18 costs on weaker planets; the fresh run's 40 TCE stars are the
 check.
 
+### SDE 18 on a fresh sample: adopted for long stitches (2026-11-13)
+
+`ms26-fresh` (40 TCE + 100 quiet stars, seed 26, sharing no star with any
+earlier stitched run) at `sde_threshold=18`, then the same stars upside down
+(`ms26-fresh-inv`). No failures.
+
+| | quiet stars with a signal | TCEs recovered (incl. aliases) |
+|---|---|---|
+| observed | 5/100 = 5% | 15/76 |
+| upside down | **7/100 = 7%** | 1/76 (an alias) |
+
+The inverted rate stays under the 10% the cut had to meet (24% at SDE 13
+on the paired sample). Observed and inverted quiet rates are now the same
+within the counts, so the few quiet signals left are best read as noise.
+
+What the cut costs, measured on the SDE 13 paired run, whose signals carry
+their SDE: of its 42 recovered TCEs, 1 has SDE below 18 (TCE 38462407-03, a
+period alias, not a TOI), and none of its 9 planets. The fresh sample holds
+only one planet TOI (found), so it adds little on planets; the paired run's
+nine are the evidence there.
+
+Adopted: a stitch whose sectors span 14 or more sector numbers (more than a
+year) now defaults to SDE 18 (`LONG_STITCH_SDE` in `multisector.py`); a
+13-sector stitch keeps SDE 13; `--set sde_threshold=` still overrides.
+⚠️ Validated only on the 1-13 + 27-39 layout; a contiguous two-year stitch
+(1-26) has not been tested at either cut.
+
 ## Why the third year has more false alarms (2026-11-12)
 
 Sectors 27-39 gave 93/520 quiet stars with a signal upside down (17.9%)

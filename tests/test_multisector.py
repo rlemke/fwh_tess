@@ -66,3 +66,14 @@ def test_stitched_defaults_differ_from_single_sector_only_where_declared():
     assert single.min_snr_without_two_strongest == 0.0  # single sector unchanged
     # --set still wins over the stitched defaults
     assert cfg.override(["sde_threshold=11"]).sde_threshold == 11.0
+
+
+def test_a_stitch_longer_than_a_year_raises_the_sde_threshold():
+    assert ms.base_config(sectors=list(range(1, 14))).sde_threshold == 13.0
+    long = list(range(1, 14)) + list(range(27, 40))
+    assert ms.base_config(sectors=long).sde_threshold == ms.LONG_STITCH_SDE
+    # an explicit --set still wins
+    assert (
+        ms.base_config(sectors=long).override(["sde_threshold=13"]).sde_threshold
+        == 13.0
+    )

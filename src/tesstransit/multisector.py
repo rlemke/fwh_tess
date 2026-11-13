@@ -129,13 +129,28 @@ STITCHED_DEFAULTS: dict[str, Any] = {
 }
 
 
-def base_config(prewhiten: bool = True, invert: bool = False) -> sr.SearchConfig:
-    """The stitched search's SearchConfig before any ``--set`` overrides."""
+# A stitch spanning more than a year (sectors 1-13 + 27-39, ~3 years) tries
+# ~3x the periods again. At SDE 13 the inverted curves of 25 of 104 quiet
+# stars gave a signal (ms26-pair-inv); SDE 18, fixed before a fresh sample
+# (seed 26), gave 7 of 100, and all 9 planets of the paired 26-sector run
+# have SDE >= 18. Validated only on that 1-13 + 27-39 layout.
+LONG_STITCH_SECTOR_SPAN = 14
+LONG_STITCH_SDE = 18.0
+
+
+def base_config(
+    prewhiten: bool = True, invert: bool = False, sectors: list[int] | None = None
+) -> sr.SearchConfig:
+    """The stitched search's SearchConfig before any ``--set`` overrides.
+    ``sectors`` spanning more than a year raise the SDE threshold."""
+    defaults = dict(STITCHED_DEFAULTS)
+    if sectors and max(sectors) - min(sectors) >= LONG_STITCH_SECTOR_SPAN:
+        defaults["sde_threshold"] = LONG_STITCH_SDE
     cfg = replace(
         sr.SearchConfig(),
         prewhiten_max_period_days=1.5 if prewhiten else 0.0,
         invert_flux=invert,
-        **STITCHED_DEFAULTS,
+        **defaults,
     )
     cfg.validate()
     return cfg
@@ -253,9 +268,11 @@ def main(argv: list[str] | None = None) -> int:
     )  # fmt: skip
     args = ap.parse_args(argv)
 
-    cfg = base_config(prewhiten=args.prewhiten, invert=args.invert).override(args.set)
-    args.out.mkdir(parents=True, exist_ok=True)
     sectors = parse_sectors(args.sectors)
+    cfg = base_config(
+        prewhiten=args.prewhiten, invert=args.invert, sectors=sectors
+    ).override(args.set)
+    args.out.mkdir(parents=True, exist_ok=True)
     client = lc.s3_client()
     manifests = {
         s: mf.load_or_list(client, s, args.workdir / f"manifest-s{s:04d}.json")
