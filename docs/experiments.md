@@ -1291,11 +1291,40 @@ nine are the evidence there.
 Adopted: a stitch whose sectors span 14 or more sector numbers (more than a
 year) now defaults to SDE 18 (`LONG_STITCH_SDE` in `multisector.py`); a
 13-sector stitch keeps SDE 13; `--set sde_threshold=` still overrides.
-⚠️ Validated on years 1 + 3 (south) only. A contiguous two-year stitch
+Validated on years 1 + 3 (south) here and on years 2 + 4 (north) in the
+next section. A contiguous two-year stitch
 cannot occur: of the 232,557 stars with 2-min data in sectors 1-26, none
 has sectors more than a year apart (year 1 looked south, year 2 north; at
 most 13 sectors per star). A stitch longer than a year is always alternate
-years, so the untested case is years 2 + 4 (north, sectors 14-26 + 40-55).
+years, so the untested case is years 2 + 4 (north, sectors 14-26 + 40-55);
+it was tested next, below.
+
+### SDE 18 in the north: years 2 + 4 (2026-11-13)
+
+`n4-fresh`: sectors 14-26 + 40-55, stars with 2-min data in at least 18 of
+them (4,278 eligible), 40 TCE + 100 quiet stars, seed 24, at the new default
+(no `--set`; the summary records `sde_threshold` 18.0). TCEs come from SPOC's
+multi-sector table for sectors 14-55. Then the same stars upside down
+(`n4-fresh-inv`). One star (TIC 233721916) failed in both passes: a sector
+24 light curve with negative median PDCSAP flux, rejected as invalid input.
+
+| | quiet stars with a signal | TCEs recovered (incl. aliases) | planet TOIs |
+|---|---|---|---|
+| observed | **0/100** | 26/71 (21 + 5 aliases) | 6/6 |
+| upside down | **0/100** | 4/71 (all aliases) | 0/6 |
+
+The six planet candidates (PC, on five stars; no CP/KP in the sample) are
+all found right side up, at SDE 29 to 1,027, so none is near the cut. Upside
+down none is found. TCE stars collect stray signals at the same rate as in the
+south (15 vs 16 stars observed vs inverted here; 14 vs 13 in `ms26-fresh`), so
+those are star-specific structure such as eclipsing binaries, not a northern effect.
+
+The quiet rate is lower than the south's 5-7%. With 100 stars per pass the
+difference is not significant, but the cut clearly holds: SDE 18 passes in
+both hemispheres, so the long-stitch default stands with no hemisphere
+condition. Of the 45 missed TCEs, 21 have periods outside the search grid
+(10 under the 1-day minimum, 11 at 600-1,050 days, longer than the
+longest period searched for those stars) and 6 ran out of peaks to try.
 
 ## Why the third year has more false alarms (2026-11-12)
 
