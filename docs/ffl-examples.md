@@ -171,6 +171,28 @@ namespace ex.provenance {
 
 ---
 
+## 7. A stitched sample spread over the fleet
+
+Three years of one hemisphere searched as one light curve, with its
+false-alarm control: every star is also searched upside down. Each chunk is
+one step, so `width` chunks run at once on whichever hosts meet the step's
+CPU floor; each step fetches a star's light curves once for both passes.
+
+```ffl
+namespace ex.stitched {
+    workflow SouthYears1and3(work_dir: String, holdout: Json) => (run_dir: String, inverted_run_dir: String, upside_down_hits: Long) andThen {
+        s = tess.workflows.StitchedSample(
+            sectors = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
+                       27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39],
+            work_dir = $.work_dir, label = "south-y13", n_tce = 150, n_quiet = 150,
+            seed = 31, holdout_of = $.holdout, width = 24
+        )
+        yield SouthYears1and3(run_dir = s.run_dir, inverted_run_dir = s.inverted_run_dir,
+                              upside_down_hits = s.inverted_quiet_with_signal)
+    }
+}
+```
+
 ## Syntax cheat sheet
 
 | | |

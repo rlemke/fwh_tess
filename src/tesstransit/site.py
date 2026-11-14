@@ -19,6 +19,10 @@ the same stars with their light curves turned upside down (no real transit
 survives that, so every signal there is a false alarm), and whether the
 settings are the adopted ones. It adds three tables, ``stitched_samples``,
 ``stitched_planets`` and ``stitched_signals``; no sky positions are needed.
+``--long-stitched`` takes the same spec for a stitch of two alternate years
+(e.g. sectors 1-13 + 27-39) and fills ``long_samples``, ``long_planets`` and
+``long_signals``, a section of its own: its threshold and false-alarm rate
+are not the one-year search's.
 
 Writes one self-contained ``index.html``: the data is embedded, and only d3
 and the fonts load from a CDN. It is the same page as the results dashboard,
@@ -235,7 +239,9 @@ def _stitched_run(run: Path) -> tuple[list[dict[str, str]], set[int], set[int]]:
     return matches, quiet, with_signal & quiet
 
 
-def stitched_rows(runs: Path, specs: list[list[str]]) -> dict[str, list[dict[str, str]]]:
+def stitched_rows(
+    runs: Path, specs: list[list[str]], prefix: str = "stitched"
+) -> dict[str, list[dict[str, str]]]:
     """The three stitched tables from ``label|settings|run|inverted-run|adopted`` specs.
 
     A planet is a CP/KP/PC TOI on a sampled star that a TCE or a signal
@@ -293,7 +299,11 @@ def stitched_rows(runs: Path, specs: list[list[str]]) -> dict[str, list[dict[str
                 "our_snr": _r(r["sig_snr"], 1), "our_sde": _r(r["sig_sde"], 1),
                 "toi": r["toi"], "toi_disposition": r["toi_disposition"],
             })  # fmt: skip
-    return {"stitched_samples": samples, "stitched_planets": planets, "stitched_signals": signals}
+    return {
+        f"{prefix}_samples": samples,
+        f"{prefix}_planets": planets,
+        f"{prefix}_signals": signals,
+    }
 
 
 def render(data: dict[str, Any], built: str) -> str:
@@ -328,11 +338,16 @@ def main(argv: list[str] | None = None) -> int:
         "--stitched", action="append", default=[],
         help="stitched sample: label|settings|run|inverted-run|adopted (yes/no)",
     )  # fmt: skip
+    ap.add_argument(
+        "--long-stitched", action="append", default=[],
+        help="two-year stitched sample, same form as --stitched",
+    )  # fmt: skip
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args(argv)
 
     stitched = [v.split("|") for v in args.stitched]
-    if any(len(v) != 5 for v in stitched):
+    long_stitched = [v.split("|") for v in args.long_stitched]
+    if any(len(v) != 5 for v in stitched + long_stitched):
         raise SystemExit("--stitched is label|settings|run|inverted-run|adopted")
     variants = [v.split("|") for v in args.variant]
     if any(len(v) != 5 for v in variants):
@@ -366,6 +381,7 @@ def main(argv: list[str] | None = None) -> int:
         "tce_sample": sample_rows(samples, pos),
         "variants": variant_rows(args.runs, variants, args.default),
         **stitched_rows(args.runs, stitched),
+        **stitched_rows(args.runs, long_stitched, prefix="long"),
     }
     built = datetime.now(UTC).strftime("%Y-%m-%d")
     args.out.mkdir(parents=True, exist_ok=True)
@@ -373,7 +389,8 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"{args.out / 'index.html'}: {len(data['tois'])} TOIs, "
         f"{len(data['tce_sample'])} sample rows, {len(data['variants'])} variants, "
-        f"{len(data['stitched_samples'])} stitched samples",
+        f"{len(data['stitched_samples'])} stitched samples, "
+        f"{len(data['long_samples'])} two-year samples",
         file=sys.stderr,
     )
     return 0

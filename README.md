@@ -73,7 +73,7 @@ Every term, field and outcome — ours and SPOC's `tce_*` columns — is defined
 | `site.py` | `python -m tesstransit.site` — the stand-alone results page (per-sector figures, period–depth chart, sky map, experiments, and with `--stitched` the 13-sector stitched samples with their upside-down false-alarm rate) from finished runs of any number of sectors; published at rlemke.github.io/facetwork-maps/space/tess-sector1/ |
 | `_match.py` | the TCE table and the matching rules: `recovered` / `recovered_alias` / `missed` (with a cause) / `unmatched` |
 | `handlers.py` | the Facetwork steps: `TCETable`, `Targets`, `Plan`, `SearchChunk`, `MatchSector`, `BuildSite` — each a thin layer over the modules above |
-| `ffl/tess.ffl` | facets and workflows (`SectorRun`, `SearchSectors`, `BuildResults`); `ffl/tess_site.ffl` adds `PublishResults` (needs fwh_census_us) |
+| `ffl/tess.ffl` | facets and workflows (`SectorRun`, `SearchSectors`, `BuildResults`, and `StitchedSample`: a stitched sample searched as observed and upside down, one chunk per step so it spreads over the fleet); `ffl/tess_site.ffl` adds `PublishResults` (needs fwh_census_us) |
 | `domain.py` | the `facetwork.domains` entry point, kept apart so the search runs without Facetwork |
 
 ## The false-alarm rate is measured

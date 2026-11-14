@@ -789,7 +789,9 @@ def test_site_stitched_tables_count_planets_once_and_false_alarms_per_star(tmp_p
     assert float(a["inv_lo"]) < 25.0 < float(a["inv_hi"])
     assert [p["status"] for p in d["stitched_planets"]] == ["Found", "Found"]
     # signals are listed only for the adopted settings
-    assert len(d["stitched_signals"]) == 2 and {r["sample"] for r in d["stitched_signals"]} == {"A"}
+    assert len(d["stitched_signals"]) == 2 and {
+        r["sample"] for r in d["stitched_signals"]
+    } == {"A"}
 
 
 def test_tce_backing_pairs_each_toi_with_its_own_tce():
@@ -909,7 +911,9 @@ def test_variability_veto_keeps_a_planet_on_a_varying_star():
     f = f + _box(t, 3.3, 1326.0, 3.0, 1500.0) + 300e-6 * np.sin(2 * np.pi * t / 0.71)
     res = sr.search(t, f, 42, 1, replace(FLAT, coherent_veto_fap=1e-10))
     assert any(abs(s.period_days - 3.3) < 0.01 for s in res.signals)
-    assert not any(v.reason == "coherent" and abs(v.period_days - 3.3) < 0.01 for v in res.vetoes)
+    assert not any(
+        v.reason == "coherent" and abs(v.period_days - 3.3) < 0.01 for v in res.vetoes
+    )
 
 
 def test_variability_veto_masks_the_transits_first():
@@ -924,7 +928,11 @@ def test_variability_veto_masks_the_transits_first():
 
 
 def test_variability_veto_settings_are_checked():
-    for bad in ({"coherent_veto_fap": -1.0}, {"coherent_veto_fap": 1.0},
-                {"coherent_harmonics": 0}, {"coherent_rel_window": 0.0}):
+    for bad in (
+        {"coherent_veto_fap": -1.0},
+        {"coherent_veto_fap": 1.0},
+        {"coherent_harmonics": 0},
+        {"coherent_rel_window": 0.0},
+    ):
         with pytest.raises(ValueError):
             replace(FAST, **bad).validate()

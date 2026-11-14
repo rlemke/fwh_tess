@@ -1123,8 +1123,13 @@ def search(
             # with them gone the fold looks one-sided (measured, synthetic).
             ok = layer.valid
             wave = coherent_wave(
-                time[ok], layer.flat[ok], p, t0, dur,
-                cfg.coherent_harmonics, cfg.coherent_rel_window,
+                time[ok],
+                layer.flat[ok],
+                p,
+                t0,
+                dur,
+                cfg.coherent_harmonics,
+                cfg.coherent_rel_window,
             )
             if (
                 wave is not None

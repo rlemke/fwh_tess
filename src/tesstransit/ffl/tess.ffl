@@ -27,6 +27,14 @@ namespace tess.source {
       * disk proves a star was observed and processed. Listed once, then kept. */
     event facet Targets(sector: Int, dest_dir: String) => (path: String, stars: Long)
         with Effect(kind = "external") with Cost(tier = "free")
+
+    /** SPOC's multi-sector DV TCE table from the first to the last of
+      * `sectors`, the reference for a stitched search. Durations in HOURS.
+      *
+      * ⚠️ SPOC searched every sector between first and last, so for
+      * alternate years (1-13 + 27-39) its table is wider than the stitch. */
+    event facet StitchTCETable(sectors: Json, dest_dir: String) => (path: String, url: String, tces: Long)
+        with Effect(kind = "external") with Cost(tier = "free")
 }
 
 namespace tess {
@@ -103,6 +111,57 @@ namespace tess {
         default: String = ""
     ) => (output_dir: String, page_path: String, bytes: Long)
         with Effect(kind = "external") with Cost(tier = "free")
+}
+
+namespace tess.stitch {
+
+    /** The stitched search's sample: stars with 2-minute data in at least
+      * `min_sectors` of `sectors`, `n_tce` with a SPOC TCE and `n_quiet`
+      * without, drawn with `seed` and sharing no star with `holdout_of`;
+      * or, with `sample_of`, those runs' stars again (a paired run).
+      *
+      * Writes `<work_dir>/<label>/plan.json` (stars, both search configs,
+      * the summary fields) and the chunks. The search config is the CLI's
+      * default for these sectors (SDE 18 when they span more than a year);
+      * `set` overrides fields, as `--set FIELD=VALUE` does. */
+    event facet Plan(
+        sectors: Json,
+        manifest_paths: Json,
+        tce_path: String,
+        work_dir: String,
+        label: String,
+        min_sectors: Int = 18,
+        n_tce: Int = 150,
+        n_quiet: Int = 150,
+        seed: Int = 1,
+        holdout_of: Json = [],
+        sample_of: Json = [],
+        set: Json = [],
+        chunk_size: Int = 6,
+        bin_minutes: Double = 10.0,
+        min_period_days: Double = 1.0
+    ) => (plan_path: String, chunks: Json, stars: Long, eligible: Long, run_dir: String)
+        with Effect(kind = "io") with Cost(tier = "free")
+
+    /** Search one chunk, each star as observed and upside down. A star's
+      * light curves (one per sector) are fetched once for both passes.
+      *
+      * ⚠️ Heavy: ~15 min of one core per star per pass, so `workers`
+      * processes per step, and it heartbeats while they run. The CPU floor
+      * keeps it off the small hosts. */
+    event facet SearchChunk(chunk_path: String, workers: Int = 3) => (
+        results_path: String, inverted_path: String, searched: Long, failed: Long
+    ) with Effect(kind = "external") with Cost(tier = "expensive")
+      with Timeout(minutes = 240) with Requires(cpus = 8)
+
+    /** Score one pass against the TCEs and TOIs and write its run directory
+      * (results.jsonl, matches.csv, summary.json), the files the CLI writes.
+      *
+      * ⚠️ Refuses a star in two chunks, and a planned star with no result. */
+    event facet Match(plan_path: String, results_paths: Json, toi_path: String, inverted: Boolean = false) => (
+        run_dir: String, summary_path: String, stars: Long, failed: Long,
+        tce_found: Long, quiet_with_signal: Long
+    ) with Effect(kind = "io") with Cost(tier = "free")
 }
 
 namespace tess.workflows {
@@ -247,6 +306,74 @@ namespace tess.workflows {
         )
         yield BuildResults(
             page_path = site.page_path, output_dir = site.output_dir, toi_sha256 = runs.toi_sha256
+        )
+    }
+    /** The light-curve list of every sector, `width` at a time. */
+    facet ManifestEach(sectors: Json, dest_dir: String, width: Int) => (paths: Json)
+        andThen foreach s in $.sectors limit $.width {
+            t = tess.source.Targets(sector = $.s, dest_dir = $.dest_dir)
+            yield ManifestEach(paths += t.path)
+        }
+
+    /** Every stitched chunk, `width` at a time (0 = unbounded): the fan-out
+      * that spreads a run over the fleet. */
+    facet StitchSearchEach(chunks: Json, workers: Int, width: Int) => (observed: Json, inverted: Json)
+        andThen foreach c in $.chunks limit $.width {
+            one = tess.stitch.SearchChunk(chunk_path = $.c, workers = $.workers)
+            yield StitchSearchEach(observed += one.results_path, inverted += one.inverted_path)
+        }
+
+    /** A stitched sample end to end, with its false-alarm control: the
+      * sample searched as observed and upside down (no real transit
+      * survives inversion, so every signal there is a false alarm), each
+      * pass scored into its own run directory, `<label>` and `<label>-inv`.
+      *
+      * `site_arg` is the pair in the form BuildSite's `--stitched` takes
+      * (`label|settings|run|inverted-run|adopted`), minus the settings text. */
+    workflow StitchedSample(
+        sectors: Json,
+        work_dir: String,
+        label: String,
+        min_sectors: Int = 18,
+        n_tce: Int = 150,
+        n_quiet: Int = 150,
+        seed: Int = 1,
+        holdout_of: Json = [],
+        sample_of: Json = [],
+        set: Json = [],
+        chunk_size: Int = 6,
+        workers: Int = 3,
+        width: Int = 0,
+        manifest_width: Int = 4,
+        toi_url: String = "https://archive.stsci.edu/missions/tess/catalogs/toi/tois.csv",
+        toi_max_age_hours: Double = 24.0
+    ) => (run_dir: String, inverted_run_dir: String, stars: Long, failed: Long,
+          tce_found: Long, quiet_with_signal: Long, inverted_quiet_with_signal: Long,
+          toi_sha256: String) andThen {
+        tois = fw.http.Fetch(
+            url = $.toi_url, dest = $.work_dir ++ "/tois.csv", max_age_hours = $.toi_max_age_hours
+        )
+        tce = tess.source.StitchTCETable(sectors = $.sectors, dest_dir = $.work_dir)
+        lists = ManifestEach(sectors = $.sectors, dest_dir = $.work_dir ++ "/lc", width = $.manifest_width)
+        plan = tess.stitch.Plan(
+            sectors = $.sectors, manifest_paths = lists.paths, tce_path = tce.path,
+            work_dir = $.work_dir, label = $.label, min_sectors = $.min_sectors,
+            n_tce = $.n_tce, n_quiet = $.n_quiet, seed = $.seed, holdout_of = $.holdout_of,
+            sample_of = $.sample_of, set = $.set, chunk_size = $.chunk_size
+        )
+        searched = StitchSearchEach(chunks = plan.chunks, workers = $.workers, width = $.width)
+        obs = tess.stitch.Match(
+            plan_path = plan.plan_path, results_paths = searched.observed, toi_path = tois.path
+        )
+        inv = tess.stitch.Match(
+            plan_path = plan.plan_path, results_paths = searched.inverted, toi_path = tois.path,
+            inverted = true
+        )
+        yield StitchedSample(
+            run_dir = obs.run_dir, inverted_run_dir = inv.run_dir, stars = obs.stars,
+            failed = obs.failed, tce_found = obs.tce_found,
+            quiet_with_signal = obs.quiet_with_signal,
+            inverted_quiet_with_signal = inv.quiet_with_signal, toi_sha256 = tois.sha256
         )
     }
 }

@@ -13,6 +13,12 @@ split is the one the CLIs already had internally:
    CLI's matcher over it (``--reuse``), which writes the run directory.
 5. ``tess.BuildSite`` -- the results page over finished run directories.
 
+The stitched search (``tesstransit.multisector``) has the same shape:
+``tess.source.StitchTCETable`` (SPOC's multi-sector table), ``tess.stitch.Plan``
+(eligible stars, the sample, chunks), ``tess.stitch.SearchChunk`` (each star
+fetched once and searched as observed AND upside down) and
+``tess.stitch.Match`` (one run directory per pass, as the CLI writes them).
+
 ⚠️ Paths may be local or ``s3://``. Work happens on local scratch; inputs are
 localized and outputs uploaded, so no step depends on a disk another host
 cannot see. A chunk's results are rewritten whole by every attempt, so a
@@ -32,6 +38,7 @@ import time
 import urllib.request
 from collections.abc import Callable, Iterator
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -143,7 +150,7 @@ def _fetch(url: str, timeout: int = 300) -> bytes:
 # ---------------------------------------------------------------------------
 
 
-def tce_url(sector: int, index_html: str) -> str:
+def tce_url(sector: int, index_html: str, last: int | None = None) -> str:
     """The single-sector DV TCE table for ``sector`` from MAST's directory page.
 
     ⚠️ The file name carries a processing stamp (``tess<stamp>-s0001-s0001``)
@@ -151,14 +158,13 @@ def tce_url(sector: int, index_html: str) -> str:
     reprocesses a sector there are two; the newest stamp wins, and which one
     was used is returned with the table.
     """
-    pat = re.compile(
-        rf'href="(tess(\d+)-s{sector:04d}-s{sector:04d}_dvr-tcestats\.csv)"'
-    )
+    last = sector if last is None else last
+    pat = re.compile(rf'href="(tess(\d+)-s{sector:04d}-s{last:04d}_dvr-tcestats\.csv)"')
     found = sorted(pat.findall(index_html), key=lambda m: m[1])
     if not found:
-        raise ValueError(
-            f"no single-sector TCE table for sector {sector} at {TCE_INDEX}"
-        )
+        what = (f"single-sector TCE table for sector {sector}" if last == sector
+                else f"multi-sector TCE table for sectors {sector}-{last}")  # fmt: skip
+        raise ValueError(f"no {what} at {TCE_INDEX}")
     return TCE_INDEX + found[-1][0]
 
 
@@ -380,6 +386,267 @@ def handle_match_sector(params: dict[str, Any]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# stitched (multi-sector) search: plan -> search both passes -> match
+# ---------------------------------------------------------------------------
+
+
+def _ctx(params: dict[str, Any]) -> Any:
+    try:
+        from facetwork.runtime.handler_context import HandlerContext
+    except ImportError:  # outside a runner (tests, a bare checkout)
+        return None
+    return HandlerContext.from_payload(params)
+
+
+def _sectors(params: dict[str, Any]) -> list[int]:
+    from .multisector import parse_sectors
+
+    raw = params["sectors"]
+    return parse_sectors(raw) if isinstance(raw, str) else sorted(int(s) for s in raw)
+
+
+def handle_stitch_tce_table(params: dict[str, Any]) -> dict[str, Any]:
+    """SPOC's multi-sector DV table covering ``sectors`` (first to last).
+
+    ⚠️ The table is SPOC's search over first..last, every sector in between
+    included; for alternate years that is wider than the stitch, which is
+    the reference the CLI runs used too."""
+    say = _say(params)
+    secs = _sectors(params)
+    first, last = secs[0], secs[-1]
+    dest = _join(str(params["dest_dir"]), f"s{first:04d}-s{last:04d}_tcestats.csv")
+    url = tce_url(first, _fetch(TCE_INDEX).decode(), last=last)
+    marker = dest + ".url"
+    if _exists(dest) and _exists(marker) and _read(marker).strip() == url:
+        say(f"sectors {first}-{last}: TCE table current ({url})")
+    else:
+        say(f"sectors {first}-{last}: fetching {url}")
+        _write(dest, _fetch(url).decode())
+        _write(marker, url + "\n")
+    return {"path": dest, "url": url, "tces": len(mt.parse_tce_csv(_read(dest)))}
+
+
+def handle_stitch_plan(params: dict[str, Any]) -> dict[str, Any]:
+    """Eligible stars, the sample, chunks, and ``plan.json`` for Match."""
+    from . import multisector as ms
+    from .pilot import stars_of
+
+    say = _say(params)
+    secs = _sectors(params)
+    size = int(params.get("chunk_size") or 6)
+    if size < 1:
+        raise ValueError("chunk_size must be at least 1")
+    min_sectors = int(params.get("min_sectors") or 18)
+    label = str(params["label"])
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", label):
+        raise ValueError(f"label must be a plain name, got {label!r}")
+    run_dir = _join(str(params["work_dir"]), label)
+    manifests = {}
+    for path in params["manifest_paths"]:
+        m = re.search(r"manifest-s(\d{4})\.json$", str(path))
+        if not m:
+            raise ValueError(f"not a sector manifest: {path}")
+        sec = int(m.group(1))
+        manifests[sec] = mf.parse(_read(str(path)), sec, str(path))
+    if sorted(manifests) != secs:
+        raise ValueError(f"manifests cover {sorted(manifests)}, sectors are {secs}")
+    stars = ms.eligible(manifests, min_sectors)
+    tces = mt.parse_tce_csv(_read(str(params["tce_path"])))
+    with _scratch() as tmp:
+        held = [_pull_run(str(r), tmp / f"h{i}")
+                for i, r in enumerate(params.get("holdout_of") or [])]  # fmt: skip
+        paired = [_pull_run(str(r), tmp / f"p{i}")
+                  for i, r in enumerate(params.get("sample_of") or [])]  # fmt: skip
+        tce_stars, quiet, unobserved, dropped = ms.choose(
+            stars, tces, int(params.get("n_tce") or 150),
+            int(params.get("n_quiet") or 150), int(params.get("seed") or 1),
+            stars_of(held), stars_of(paired) if paired else None,
+        )  # fmt: skip
+    observed = ms.base_config(sectors=secs).override(list(params.get("set") or []))
+    inverted = replace(observed, invert_flux=True)
+    inverted.validate()
+    sample = tce_stars + quiet
+    chunks = []
+    for i in range(0, len(sample), size):
+        path = _join(run_dir, "chunks", f"c{i // size:04d}.json")
+        jobs = [{"tic_id": t, "keys": {str(k): v for k, v in stars[t].items()}}
+                for t in sample[i : i + size]]  # fmt: skip
+        _write(path, json.dumps({"jobs": jobs}))
+        chunks.append(path)
+    plan = {
+        "label": label,
+        "run_dir": run_dir,
+        "inverted_run_dir": run_dir + "-inv",
+        "tce_path": str(params["tce_path"]),
+        "tce_stars": tce_stars,
+        "quiet": quiet,
+        "bin_minutes": float(params.get("bin_minutes") or 10.0),
+        "min_period_days": float(params.get("min_period_days") or 1.0),
+        "configs": {"observed": observed.to_dict(), "inverted": inverted.to_dict()},
+        "meta": {
+            "sectors": secs,
+            "min_sectors": min_sectors,
+            "eligible_stars": len(stars),
+            "bin_minutes": float(params.get("bin_minutes") or 10.0),
+            "holdout_of": [str(r) for r in params.get("holdout_of") or []],
+            "sample_of": [str(r) for r in params.get("sample_of") or []],
+            "sample_of_not_eligible": dropped,
+            "tce_stars_not_eligible": len(unobserved),
+        },
+    }
+    plan_path = _join(run_dir, "plan.json")
+    _write(plan_path, json.dumps(plan))
+    say(f"{len(stars):,} stars with 2-min data in >= {min_sectors} of {len(secs)} sectors; "
+        f"sample {len(tce_stars)} TCE + {len(quiet)} quiet in {len(chunks)} chunks")  # fmt: skip
+    return {
+        "plan_path": plan_path,
+        "chunks": chunks,
+        "stars": len(sample),
+        "eligible": len(stars),
+        "run_dir": run_dir,
+    }
+
+
+def _config(d: dict[str, Any]) -> sr.SearchConfig:
+    fields = {f for f in sr.SearchConfig.__dataclass_fields__}
+    kw = {
+        k: (tuple(v) if isinstance(v, list) else v) for k, v in d.items() if k in fields
+    }
+    cfg = sr.SearchConfig(**kw)
+    cfg.validate()
+    return cfg
+
+
+def handle_stitch_search_chunk(params: dict[str, Any]) -> dict[str, Any]:
+    """Search one chunk's stars as observed and upside down.
+
+    Each star's light curves are fetched once for both passes. A long step
+    (a star is ~15 min per pass on one core), so it heartbeats every minute
+    while the pool works and stops early when its run is terminated."""
+    from concurrent.futures import FIRST_COMPLETED, wait
+
+    from . import multisector
+
+    search_star_passes = multisector.search_star_passes
+
+    say = _say(params)
+    ctx = _ctx(params)
+    chunk_path = str(params["chunk_path"])
+    run_dir = chunk_path.split("/chunks/")[0]
+    plan = json.loads(_read(_join(run_dir, "plan.json")))
+    cfgs = [_config(plan["configs"]["observed"]), _config(plan["configs"]["inverted"])]
+    jobs = json.loads(_read(chunk_path))["jobs"]
+    workers = max(1, int(params.get("workers") or 3))
+    t0 = time.time()
+    obs: list[dict[str, Any]] = []
+    inv: list[dict[str, Any]] = []
+
+    def beat() -> None:
+        if ctx is None:
+            return
+        ctx.raise_if_cancelled()
+        ctx.heartbeat(progress_message=f"{len(obs)}/{len(jobs)} stars")
+
+    def args(j: dict[str, Any], tmp: Path) -> tuple[Any, ...]:
+        return (int(j["tic_id"]), {int(k): v for k, v in j["keys"].items()}, str(tmp),
+                False, cfgs, plan["bin_minutes"], plan["min_period_days"])  # fmt: skip
+
+    with _scratch() as tmp:
+        if workers <= 1:
+            for j in jobs:
+                o, i = search_star_passes(*args(j, tmp))
+                obs.append(o)
+                inv.append(i)
+                beat()
+        else:
+            with ProcessPoolExecutor(max_workers=workers) as pool:
+                pending = {pool.submit(search_star_passes, *args(j, tmp)) for j in jobs}
+                try:
+                    while pending:
+                        done, pending = wait(
+                            pending, timeout=60, return_when=FIRST_COMPLETED
+                        )
+                        for f in done:
+                            o, i = f.result()
+                            obs.append(o)
+                            inv.append(i)
+                        beat()
+                except BaseException:
+                    for f in pending:
+                        f.cancel()
+                    raise
+    name = chunk_path.rsplit("/", 1)[1].removesuffix(".json") + ".jsonl"
+    paths = []
+    for recs, sub in ((obs, "parts"), (inv, "parts-inv")):
+        recs.sort(key=lambda r: r["tic_id"])
+        dest = _join(run_dir, sub, name)
+        _write(dest, "".join(json.dumps(r) + "\n" for r in recs))
+        paths.append(dest)
+    failed = [r for r in obs if not r["ok"]]
+    for r in failed:
+        say(f"TIC {r['tic_id']} failed: {r['error']}", level="warning")
+    say(
+        f"{len(jobs)} stars x 2 passes in {time.time() - t0:.0f}s, {len(failed)} failed"
+    )
+    return {
+        "results_path": paths[0],
+        "inverted_path": paths[1],
+        "searched": len(obs),
+        "failed": len(failed),
+    }
+
+
+def handle_stitch_match(params: dict[str, Any]) -> dict[str, Any]:
+    """Gather one pass's chunks and score it: the CLI's run directory."""
+    from . import multisector as ms
+
+    say = _say(params)
+    plan = json.loads(_read(str(params["plan_path"])))
+    inverted = bool(params.get("inverted", False))
+    parts = [str(p) for p in params["results_paths"]]
+    records = [json.loads(ln) for p in parts for ln in _read(p).splitlines() if ln]
+    ids = [r["tic_id"] for r in records]
+    if len(set(ids)) != len(ids):
+        raise ValueError(f"{plan['label']}: a star appears in two chunks")
+    expected = set(plan["tce_stars"]) | set(plan["quiet"])
+    if set(ids) != expected:
+        raise ValueError(
+            f"{plan['label']}: {len(expected - set(ids))} planned stars have no "
+            f"result, {len(set(ids) - expected)} results were not planned"
+        )
+    cfg = _config(plan["configs"]["inverted" if inverted else "observed"])
+    run_dir = plan["inverted_run_dir"] if inverted else plan["run_dir"]
+    meta = dict(plan["meta"])
+    if inverted:
+        meta["sample_of"] = [plan["run_dir"]]
+    meta["seconds"] = {"workflow": True}
+    with _scratch() as tmp:
+        out = tmp / "run"
+        summary = ms.write_run(
+            out, records, plan["tce_stars"], plan["quiet"],
+            mt.parse_tce_csv(_read(plan["tce_path"])),
+            _read(str(params["toi_path"])) if params.get("toi_path") else None,
+            cfg, meta,
+        )  # fmt: skip
+        _push_dir(out, run_dir)
+    g = summary["tce_group"]
+    found = g.get("recovered", 0) + g.get("recovered_alias", 0)
+    q = summary["quiet_group"]["stars_with_any_signal"]
+    failed = len(summary["sample"]["failed"])
+    say(f"{plan['label']}{' upside down' if inverted else ''}: {found} of "
+        f"{summary['tces_in_sample']} TCEs found, {q} of {len(plan['quiet'])} "
+        f"quiet stars with a signal, {failed} failed")  # fmt: skip
+    return {
+        "run_dir": run_dir,
+        "summary_path": _join(run_dir, "summary.json"),
+        "stars": len(records),
+        "failed": failed,
+        "tce_found": found,
+        "quiet_with_signal": q,
+    }
+
+
+# ---------------------------------------------------------------------------
 # results page
 # ---------------------------------------------------------------------------
 
@@ -448,6 +715,10 @@ _DISPATCH: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
     "tess.SearchChunk": handle_search_chunk,
     "tess.MatchSector": handle_match_sector,
     "tess.BuildSite": handle_build_site,
+    "tess.source.StitchTCETable": handle_stitch_tce_table,
+    "tess.stitch.Plan": handle_stitch_plan,
+    "tess.stitch.SearchChunk": handle_stitch_search_chunk,
+    "tess.stitch.Match": handle_stitch_match,
 }
 
 

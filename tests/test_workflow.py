@@ -189,3 +189,113 @@ def test_every_ffl_block_in_the_docs_compiles(tmp_path):
             argv += ["--library", str(library)]
         done = subprocess.run(argv, capture_output=True, text=True, check=False)
         assert done.returncode == 0, f"block {i}:\n{block}\n{done.stderr}{done.stdout}"
+
+
+# ---------------------------------------------------------------------------
+# stitched search: tess.workflows.StitchedSample
+# ---------------------------------------------------------------------------
+
+STITCH_TCE_CSV = TCE_CSV.replace("1326.1", "1330.0")
+STITCH_SECTORS = [1, 2, 27]
+
+
+def _fake_passes(tic, keys, workdir, keep, cfgs, bin_minutes, min_period_days):
+    out = []
+    for cfg in cfgs:
+        hit = tic == 42 and not cfg.invert_flux
+        signals = [sr.Signal(1, 3.7, 1330.0, 3.0, 1500.0, 30.0, 20.0, 7)] if hit else []
+        res = sr.SearchResult(
+            tic_id=tic, sector=0, config=cfg.to_dict(), n_points=1000,
+            scatter_ppm=500.0, signals=signals, stop_reason="below_threshold",
+        )  # fmt: skip
+        out.append({
+            "tic_id": tic, "ok": True, "result": asdict(res),
+            "sectors": [{"sector": s} for s in sorted(keys)],
+            "baseline_days": 700.0, "n_binned": 1000,
+            "seconds": {"fetch": 0.1, "total": 1.0},
+        })  # fmt: skip
+    return out
+
+
+@pytest.fixture
+def stitch_inputs(tmp_path, monkeypatch):
+    from tesstransit import multisector
+
+    monkeypatch.setattr(multisector, "search_star_passes", _fake_passes)
+    work = tmp_path / "work"
+    (work / "lc").mkdir(parents=True)
+    for s in STITCH_SECTORS:
+        (work / "lc" / f"manifest-s{s:04d}.json").write_text(json.dumps(
+            {"sector": s, "targets": {str(t): f"key-{t}-{s}" for t in STARS}}
+        ))  # fmt: skip
+    (tmp_path / "tce.csv").write_text(STITCH_TCE_CSV)
+    (tmp_path / "tois.csv").write_text(TOI_CSV)
+
+    def fetch(params):
+        return {"path": str(tmp_path / "tois.csv"), "sha256": "abc"}
+
+    def tce_table(params):
+        assert params["sectors"] == STITCH_SECTORS
+        return {"path": str(tmp_path / "tce.csv"), "url": "u", "tces": 2}
+
+    handlers = {
+        **HANDLERS,
+        "fw.http.Fetch": fetch,
+        "tess.source.StitchTCETable": tce_table,
+    }
+    inputs = {
+        "sectors": STITCH_SECTORS, "work_dir": str(work), "label": "fleet1",
+        "min_sectors": 3, "n_tce": 2, "n_quiet": 3, "seed": 1,
+        "chunk_size": 2, "workers": 1,
+    }  # fmt: skip
+    return inputs, handlers
+
+
+def test_stitched_sample_searches_both_passes_once_per_chunk(stitch_inputs):
+    inputs, handlers = stitch_inputs
+    out, ran = run("tess.workflows.StitchedSample", inputs, handlers)
+    assert ran.count("tess.stitch.SearchChunk") == 3  # 5 stars, 2 per chunk
+    assert ran.count("tess.stitch.Match") == 2
+    assert ran.count("tess.source.Targets") == 3
+    obs = json.loads((Path(out["run_dir"]) / "summary.json").read_text())
+    inv = json.loads((Path(out["inverted_run_dir"]) / "summary.json").read_text())
+    assert out["inverted_run_dir"] == out["run_dir"] + "-inv"
+    assert obs["sample"] == {"tce_stars": 2, "quiet_stars": 3, "failed": {}}
+    assert obs["tce_group"]["recovered"] == 1 and "recovered" not in inv["tce_group"]
+    assert out["tce_found"] == 1 and out["inverted_quiet_with_signal"] == 0
+    # Sectors 1-27 span more than a year: the long-stitch SDE applies.
+    assert obs["search_config"]["sde_threshold"] == 18.0
+    assert obs["search_config"]["invert_flux"] is False
+    assert inv["search_config"]["invert_flux"] is True
+    assert inv["sample_of"] == [out["run_dir"]]
+    # The same stars in both passes.
+    ids = [
+        json.loads(ln)["tic_id"]
+        for ln in (Path(out["run_dir"]) / "results.jsonl").open()
+    ]
+    ids_inv = [
+        json.loads(ln)["tic_id"]
+        for ln in (Path(out["inverted_run_dir"]) / "results.jsonl").open()
+    ]
+    assert ids == ids_inv == sorted(ids) and len(ids) == 5
+
+
+def test_stitched_match_refuses_a_planned_star_with_no_result(stitch_inputs, tmp_path):
+    inputs, handlers = stitch_inputs
+    out, _ = run("tess.workflows.StitchedSample", inputs, handlers)
+    parts = sorted((Path(out["run_dir"]) / "parts").iterdir())
+    with pytest.raises(ValueError, match="no result"):
+        h.handle_stitch_match({
+            "plan_path": str(Path(out["run_dir"]) / "plan.json"),
+            "results_paths": [str(p) for p in parts[:-1]], "toi_path": str(tmp_path / "tois.csv"),
+        })  # fmt: skip
+
+
+def test_stitch_tce_url_finds_the_multi_sector_table():
+    page = (
+        '<a href="tess2018206190142-s0001-s0001_dvr-tcestats.csv">'
+        '<a href="tess2021182162423-s0001-s0039_dvr-tcestats.csv">'
+    )
+    assert h.tce_url(1, page, last=39).endswith("s0001-s0039_dvr-tcestats.csv")
+    with pytest.raises(ValueError, match="sectors 1-13"):
+        h.tce_url(1, page, last=13)
