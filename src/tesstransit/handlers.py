@@ -559,7 +559,9 @@ def handle_stitch_search_chunk(params: dict[str, Any]) -> dict[str, Any]:
                 inv.append(i)
                 beat()
         else:
-            with ProcessPoolExecutor(max_workers=workers) as pool:
+            with ProcessPoolExecutor(
+                max_workers=workers, initializer=multisector.one_thread
+            ) as pool:
                 pending = {pool.submit(search_star_passes, *args(j, tmp)) for j in jobs}
                 try:
                     while pending:

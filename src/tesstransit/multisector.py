@@ -54,6 +54,26 @@ from .pilot import _result_from_dict, _toi_for, parse_tois, select_sample, stars
 _client: Any = None
 
 
+def one_thread() -> None:
+    """Pool initializer: one BLAS/OpenMP thread per search process.
+
+    ⚠️ The searches already run one per core. Linux numpy ships OpenBLAS,
+    which starts a thread per core in EVERY process, so 12 searches on a
+    24-thread host ran ~290 threads and the fleet searched slower than one
+    Mac running 12 alone (measured 2026-11-14: 22 stars in 2.7 h on five
+    hosts). The env vars cover libraries not loaded yet; threadpoolctl caps
+    the ones a forked worker inherited already loaded."""
+    import os
+
+    for var in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[var] = "1"
+    try:
+        from threadpoolctl import threadpool_limits
+    except ImportError:
+        return
+    threadpool_limits(1)
+
+
 def parse_sectors(text: str) -> list[int]:
     """``"1-13"`` or ``"1,2,5"`` -> sorted sector numbers."""
     out: set[int] = set()
@@ -417,7 +437,7 @@ def main(argv: list[str] | None = None) -> int:
     sample = tce_stars + quiet
     records: list[dict[str, Any]] = []
     t1 = time.time()
-    with ProcessPoolExecutor(max_workers=args.workers) as pool:
+    with ProcessPoolExecutor(max_workers=args.workers, initializer=one_thread) as pool:
         futs = [
             pool.submit(
                 _search_star,

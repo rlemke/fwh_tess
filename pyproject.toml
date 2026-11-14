@@ -13,6 +13,7 @@ dependencies = [
     "astropy>=6.0",      # FITS reader + BoxLeastSquares
     "boto3>=1.28",       # anonymous reads of MAST's public S3 copy of TESS
     "scipy>=1.11",       # spline detrending
+    "threadpoolctl>=3.1", # one BLAS thread per search process
 ]
 
 [project.optional-dependencies]
