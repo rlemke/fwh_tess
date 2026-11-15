@@ -17,7 +17,9 @@ Sectors 1–39 searched (the first three years). Of the planets and candidates
 SPOC detected in the same sector, **682 of 707 (96.5%)** are found again in
 sectors 1–13, **670 of 696 (96.3%)** in sectors 14–26 and **1,341 of 1,383
 (97.0%)** in sectors 27–39; the last two were searched with nothing tuned on
-them. The results page shows all 39:
+them. Two years stitched together (SDE 18) find **22 of 22** planets and
+candidates in range over three samples, with an upside-down false-alarm rate
+of 4.6%. The results page shows all 39:
 <https://rlemke.github.io/facetwork-maps/space/tess-sector1/>.
 
 A Facetwork domain (`tess`): the command-line tools and the FFL workflows run
@@ -70,7 +72,7 @@ Every term, field and outcome — ours and SPOC's `tce_*` columns — is defined
 | `vet.py` | `python -m tesstransit.vet` — odd/even, secondary-eclipse and V-shape tests at a signal's ephemeris; thresholds measured on recovered CP/KP planets vs EB TOIs |
 | `ttv.py` | `python -m tesstransit.ttv` — each transit timed on the stitched light curve, O − C against the best fixed period |
 | `planets.py` | `python -m tesstransit.planets` — every TOI in the sector → search → match against the TOI, with each ephemeris forced on our flux |
-| `site.py` | `python -m tesstransit.site` — the stand-alone results page (per-sector figures, period–depth chart, sky map, experiments, and with `--stitched` the 13-sector stitched samples with their upside-down false-alarm rate) from finished runs of any number of sectors; published at rlemke.github.io/facetwork-maps/space/tess-sector1/ |
+| `site.py` | `python -m tesstransit.site` — the stand-alone results page (per-sector figures, period–depth chart, sky map, experiments, and with `--stitched` the 13-sector stitched samples and with `--long-stitched` the two-year ones, each with its upside-down false-alarm rate) from finished runs of any number of sectors; published at rlemke.github.io/facetwork-maps/space/tess-sector1/ |
 | `_match.py` | the TCE table and the matching rules: `recovered` / `recovered_alias` / `missed` (with a cause) / `unmatched` |
 | `handlers.py` | the Facetwork steps: `TCETable`, `Targets`, `Plan`, `SearchChunk`, `MatchSector`, `BuildSite` — each a thin layer over the modules above |
 | `ffl/tess.ffl` | facets and workflows (`SectorRun`, `SearchSectors`, `BuildResults`, and `StitchedSample`: a stitched sample searched as observed and upside down, one chunk per step so it spreads over the fleet); `ffl/tess_site.ffl` adds `PublishResults` (needs fwh_census_us) |
@@ -164,6 +166,33 @@ for their 9-11 h transits: 810.02 is in the data but falls below the SDE 13
 cut, and 6902.01's transits on a very bright star are as large as the
 detrending residuals. Details:
 `docs/experiments.md`.
+
+## Two years stitched together
+
+No star has 2-minute data in two consecutive years (TESS looked south in
+year 1 and north in year 2), so a longer stitch joins alternate years:
+sectors 1-13 + 27-39 or 14-26 + 40-55. The baseline is about three years and
+the search runs to half of it, roughly three times the trial periods of one
+year, so stitches spanning at least 14 sector numbers require **SDE 18**
+instead of 13 (chosen on a paired sample, then fixed). Three samples drawn
+after that, each searched as observed and upside down:
+
+| sample | sectors | planets in range found | no-TCE stars with a signal, observed | upside down |
+|---|---|---|---|---|
+| South A | 1-13 + 27-39 | 1/1 | 5/100 | 7/100 |
+| North A | 14-26 + 40-55 | 6/6 | 0/99 | 0/99 |
+| South B | 1-13 + 27-39 | 15/15 | 9/149 | 9/149 |
+
+Pooled: 22 of 22 planets and candidates in range found (the longest TOI
+791.01 at 139.3 d), and an upside-down rate of 16/348 = 4.6% (2.8-7.3%).
+Stars whose light curves cannot be read (negative median PDCSAP flux) are left
+out of both the star and the planet counts.
+
+South B ran as `tess.workflows.StitchedSample` on the Facetwork fleet: 100
+chunks of 3 stars over six hosts, 21.8 h. The median star took 950-1,010 s per pass on one fast host
+and 2,600-3,500 s on the fleet's mix, so a sample of this size is fleet work. The
+search workers cap BLAS at one thread each (`multisector.one_thread`), which
+keeps the hosts from oversubscribing but does not make a star faster.
 
 ## Tests
 
