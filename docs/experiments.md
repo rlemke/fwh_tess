@@ -1326,6 +1326,43 @@ condition. Of the 45 missed TCEs, 21 have periods outside the search grid
 (10 under the 1-day minimum, 11 at 600-1,050 days, longer than the
 longest period searched for those stars) and 6 ran out of peaks to try.
 
+### SDE 18 on a second southern sample, run on the fleet (2026-11-15)
+
+`south-y13-fleet`: sectors 1-13 + 27-39 (3,311 eligible stars), 150 TCE + 150
+quiet stars, seed 31, held out from all eight earlier stitched samples, at the
+SDE 18 default. Unlike the earlier samples it ran as the FFL workflow
+`tess.workflows.StitchedSample` on the fleet: 100 chunks of 3 stars, each
+searched as observed and upside down, spread over six hosts. Two stars failed
+in both passes (TIC 167811672 and 300038935: negative median PDCSAP flux in
+one sector). The second one hosts TOI 1228.01 (CP), which is therefore not
+searched and is left out of the planet count, like the stars themselves.
+
+| | quiet stars with a signal | TCEs recovered (incl. aliases) | planet TOIs in range |
+|---|---|---|---|
+| observed | **9/149** (6.0%) | 76/167 in grid (45 + 31 aliases) | **15/15** |
+| upside down | **9/149** (6.0%, 95% 3.2-11.1%) | 0/167 | 0/15 |
+
+All 15 planets and candidates in range are found right side up, at SDE 20 to
+3,257, including TOI 791.01 at 139.3 days; two more PCs (673 and 739 days) are
+longer than the longest period searched. Of the 9 quiet stars with a signal,
+6 show the same signal (1.0-1.9 d, and 6.3 d) in both passes, so that is
+stellar variability. Only 3 are seen just right side up, all long-period
+(136-184 days, so two or three events) at SDE 20-23, just above the cut.
+
+Pooled over the three two-year samples (South A, North A, South B): 22/22
+planets in range found; upside down, 16 of 348 quiet stars gave a signal
+(4.6%, 95% 2.8-7.3%), against 14 of 348 as observed. SDE 18 stands.
+
+**Fleet run.** 21.8 h wall clock. The median star took 3,451 s observed
+(2,566 s upside down) against about 1,000 s on one 16-core host with 12
+workers: the fleet's hosts are slower per core and were run at about one
+search process per core plus their other runners. Each forked worker started
+OpenBLAS with one thread per core; capping BLAS to one thread per worker
+(`multisector.one_thread`, rolled out mid-run) removed the oversubscription
+but did not change chunk times (6,993 s after vs 6,390-10,267 s before on the
+same host), so the cost is the search itself. The OSM runners also claim
+chunks, since the runner image carries every domain's handlers.
+
 ## Why the third year has more false alarms (2026-11-12)
 
 Sectors 27-39 gave 93/520 quiet stars with a signal upside down (17.9%)

@@ -247,7 +247,9 @@ def stitched_rows(
     A planet is a CP/KP/PC TOI on a sampled star that a TCE or a signal
     matched (``matches.csv``), counted once per sample: found if any of its
     rows was recovered (an alias counts) or is a signal SPOC made no TCE for,
-    else missed. TCEs whose period is outside the search grid are left out.
+    else missed. TCEs whose period is outside the search grid are left out,
+    and so are those on stars whose light curves could not be read (not
+    searched), as those stars are left out of the sample counts too.
     """
     samples, planets, signals = [], [], []
     for order, (label, settings, run, inv, adopted) in enumerate(specs, 1):
@@ -257,7 +259,7 @@ def stitched_rows(
         for r in matches:
             if r["toi_disposition"] not in PLANET_DISPOSITIONS or r["group"] != "tce":
                 continue
-            if r["cause"] == "outside_search_grid":
+            if r["cause"] in ("outside_search_grid", "not_searched"):
                 continue
             b = r["bucket"]
             found = b.startswith("recovered") or b == "unmatched"
