@@ -1403,3 +1403,34 @@ against 70 and 59 (13.5%, 11.3%). Four checks:
    unchanged, and nothing on the site changes. (Scratch driver: reuses
    `pilot._search_one` with each star's recorded `SearchConfig`.)
 
+## Sectors 40-55: the fourth year, untuned (2026-11-16)
+
+The northern hemisphere again, two years after sectors 14-26, searched with
+the single-sector default unchanged (`s{N}-{planets,pilot,pilot-inv}-pwC`,
+code as of f6652ab). SPOC TCE tables `s0040`-`s0055`, 1,023-3,146 TCEs
+each; TOI table as of 2026-11-04. Sixteen sectors, about 3.4 minutes each on
+one machine.
+
+| | sectors 1-13 | sectors 14-26 | sectors 27-39 | sectors 40-55 |
+|---|---|---|---|---|
+| planet TOIs (CP/KP/PC) with a TCE in the sector, found | 682/707 = 96.5% | 670/696 = 96.3% | 1,341/1,383 = 97.0% | 1,923/1,957 = 98.3% (97.6-98.8) |
+| planet TOIs with no TCE in the sector, found | 108 | 165 | 203 | 360 |
+| ... of those detectable in the sector | 108/120 | 165/184 | 203/236 | 360/401 |
+| sample TCEs found (incl. aliases) | 536/1,125 | 627/1,136 | 606/1,091 | 735/1,392 |
+| quiet stars with a signal | 66/520 = 12.7% | 61/520 = 11.7% | 81/520 = 15.6% | 89/640 = 13.9% |
+| quiet stars with a signal, upside down | 70/520 = 13.5% (10.8-16.7) | 59/520 = 11.3% (8.9-14.4) | 93/520 = 17.9% (14.8-21.4) | 92/640 = 14.4% (11.9-17.3) |
+
+Planet recovery is the highest of the four years. The 34 misses: weak after
+detrending (19), not detected (13), outside the search grid (1) and one TOI
+too weak even at its own ephemeris. Two stars in sector 50 are refused for a
+negative median PDCSAP flux (TIC 162689341 among the TOIs, TIC 417582774 in
+the quiet sample).
+
+⚠️ **The upside-down rate is not uniform across the year.** Sectors 40-51
+give 48/480 = 10.0% (7.6-13.0), in line with years 1 and 2; sectors 52-55
+give **44/160 = 27.5% (21.2-34.9)**, per sector 10-13 of 40. The observed
+search agrees there (37/160 = 23.1%), so signals on no-TCE stars are still
+false alarms as a group, but the cause of the rise is **not yet
+investigated**. The year-3 rise turned out to be which stars got 2-minute
+cadence, not processing (previous section); the same test, searching the
+same stars in another year, would settle this one.

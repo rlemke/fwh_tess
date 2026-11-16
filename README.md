@@ -13,13 +13,13 @@ alone. Signals with no TCE are **unvetted** and are never reported as planets.
 
 ## Status
 
-Sectors 1–39 searched (the first three years). Of the planets and candidates
+Sectors 1–55 searched (the first four years). Of the planets and candidates
 SPOC detected in the same sector, **682 of 707 (96.5%)** are found again in
-sectors 1–13, **670 of 696 (96.3%)** in sectors 14–26 and **1,341 of 1,383
-(97.0%)** in sectors 27–39; the last two were searched with nothing tuned on
-them. Two years stitched together (SDE 18) find **22 of 22** planets and
+sectors 1–13, **670 of 696 (96.3%)** in sectors 14–26, **1,341 of 1,383
+(97.0%)** in sectors 27–39 and **1,923 of 1,957 (98.3%)** in sectors 40–55;
+the last three were searched with nothing tuned on them. Two years stitched together (SDE 18) find **22 of 22** planets and
 candidates in range over three samples, with an upside-down false-alarm rate
-of 4.6%. The results page shows all 39:
+of 4.6%. The results page shows all 55:
 <https://rlemke.github.io/facetwork-maps/space/tess-sector1/>.
 
 A Facetwork domain (`tess`): the command-line tools and the FFL workflows run
@@ -91,8 +91,10 @@ noise, and a stricter cut costs planets faster than it removes them (SDE 14,
 measured with the earlier three-term pre-whitening: 9.8% false alarms, 92.9%
 of planets). Sectors 14–26, untuned, give the same picture: 11.3%
 (8.9–14.4%) upside down against 11.7% as observed. Sectors 27–39 agree
-(17.9% upside down, 15.6% observed), but the rate itself is higher than in
-either earlier year, for a reason not yet found. Details:
+(17.9% upside down, 15.6% observed); the higher rate there is a change in
+which stars got 2-minute cadence, not in the data. Sectors 40–55 give 14.4%
+upside down (13.9% observed), but not evenly: 10.0% in sectors 40–51 and
+27.5% in sectors 52–55, for a reason not yet investigated. Details:
 `docs/experiments.md`.
 
 ## Completeness is measured
