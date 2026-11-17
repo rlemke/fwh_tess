@@ -148,11 +148,13 @@ namespace tess.stitch {
       *
       * ⚠️ Heavy: ~15 min of one core per star per pass, so `workers`
       * processes per step, and it heartbeats while they run. The CPU floor
-      * keeps it off the small hosts. */
+      * is one CPU per worker: runners book it against the host's CPUs, so a
+      * host runs only as many chunks as it has CPUs for (a 12-CPU host ran 10
+      * chunks at once when the floor was checked against capacity alone). */
     event facet SearchChunk(chunk_path: String, workers: Int = 3) => (
         results_path: String, inverted_path: String, searched: Long, failed: Long
     ) with Effect(kind = "external") with Cost(tier = "expensive")
-      with Timeout(minutes = 240) with Requires(cpus = 8)
+      with Timeout(minutes = 240) with Requires(cpus = "$.workers")
 
     /** Score one pass against the TCEs and TOIs and write its run directory
       * (results.jsonl, matches.csv, summary.json), the files the CLI writes.
