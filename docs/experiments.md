@@ -1430,7 +1430,42 @@ the quiet sample).
 give 48/480 = 10.0% (7.6-13.0), in line with years 1 and 2; sectors 52-55
 give **44/160 = 27.5% (21.2-34.9)**, per sector 10-13 of 40. The observed
 search agrees there (37/160 = 23.1%), so signals on no-TCE stars are still
-false alarms as a group, but the cause of the rise is **not yet
-investigated**. The year-3 rise turned out to be which stars got 2-minute
-cadence, not processing (previous section); the same test, searching the
-same stars in another year, would settle this one.
+false alarms as a group, but the rise is a change in which stars
+were sampled, not in the data: see "Why sectors 52-55 have more false
+alarms" below.
+
+## Why sectors 52-55 have more false alarms (2026-11-16)
+
+Tested as for year 3: search the same stars in another sector with their
+identical recorded `SearchConfig`, upside down and as observed (scratch
+driver `y4pair.py`: each sectors 52-55 quiet sample star re-searched in the
+nearest year-2 sector, 14-26, and the nearest earlier year-4 sector, 40-51,
+where it has 2-minute data; 188 star-sector pairs, 2 refused for a negative
+PDCSAP flux).
+
+1. **Not noise.** Median scatter of the quiet sample is 1,788 ppm in
+   sectors 52-55 against 1,731 ppm in 40-51. What differs is the signals:
+   26 of the 44 upside-down signals are under 1 d (median period 0.84 d),
+   against 23 of 48 (1.9 d) in sectors 40-51, the short-period-variability
+   signature seen in year 3.
+2. **The sectors are not worse on the same stars.** Paired, the
+   difference is small and not significant:
+
+   | same stars, searched in | n | upside down, s52-55 | upside down, other sector | discordant | sign test |
+   |---|---|---|---|---|---|
+   | an earlier year-4 sector (40-51) | 115 | 27.8% | 22.6% | 13 vs 7 | p = 0.26 |
+   | a year-2 sector (14-26) | 72 | 19.4% | 12.5% | 9 vs 4 | p = 0.27 |
+
+   As observed: 20.9% vs 24.3% (p = 0.54) and 16.7% vs 12.5% (p = 0.51).
+3. **The sample is drawn from a higher-false-alarm population.** 115 of
+   the 159 distinct quiet stars (72%) were also on the 2-minute list in
+   sectors 40-51, and there those same stars give 22.6% upside down,
+   against 10.0% for the sectors 40-51 sample as a whole. The 44 stars new
+   in sectors 52-55 give 27.3%.
+
+So, as in year 3, the rise is in which stars got 2-minute cadence, not in
+the data or the processing. Observed and upside-down rates agree in every
+sector group, so signals on no-TCE stars remain false alarms as a group, and
+nothing on the site changes. The paired differences are not significant in
+either direction; a modest sector effect is not excluded, only shown to be
+much smaller than the population effect.

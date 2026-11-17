@@ -94,7 +94,8 @@ of planets). Sectors 14–26, untuned, give the same picture: 11.3%
 (17.9% upside down, 15.6% observed); the higher rate there is a change in
 which stars got 2-minute cadence, not in the data. Sectors 40–55 give 14.4%
 upside down (13.9% observed), but not evenly: 10.0% in sectors 40–51 and
-27.5% in sectors 52–55, for a reason not yet investigated. Details:
+27.5% in sectors 52–55. As in year 3 that is the targets: the same stars do
+as badly in earlier sectors. Details:
 `docs/experiments.md`.
 
 ## Completeness is measured
