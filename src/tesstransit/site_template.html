@@ -115,6 +115,11 @@
   .tx-fail { display: flex; align-items: center; justify-content: center; gap: var(--cds-gap-xs); min-height: inherit; height: 100%; color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
   .tx-fail::before { content: ""; width: 0.375rem; height: 0.375rem; border-radius: 50%; background: var(--color-bad); }
   .tx-wrap { max-height: 26rem; overflow: auto; }
+  .tx-defs { margin-top: 0.75rem; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+  .tx-defs summary { cursor: pointer; }
+  .tx-defs dl { margin: 0.5rem 0 0; display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; }
+  .tx-defs dt { font-weight: 600; color: var(--color-fg); }
+  .tx-defs dd { margin: 0; }
   .tx table { border-collapse: collapse; width: 100%; font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; }
   .tx th, .tx td { text-align: left; padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); vertical-align: top; }
   .tx th { position: sticky; top: 0; background: var(--color-panel); color: var(--color-fg-muted); font-weight: var(--cds-font-weight-medium); }
@@ -173,22 +178,38 @@
       <table data-source="by_sector" data-row-key="sector">
         <thead>
           <tr>
-            <th class="n" data-field="sector">Sector</th>
-            <th class="n" data-field="planets_found">Planets found</th>
-            <th class="n" data-field="planets_total">Planets SPOC detected</th>
-            <th class="n" data-field="confirmed_found">Confirmed found</th>
-            <th class="n" data-field="confirmed_total">Confirmed</th>
-            <th class="n" data-field="notce_found">No-TCE candidates found</th>
-            <th class="n" data-field="notce_in_data">No-TCE candidates in data</th>
-            <th class="n" data-field="tces_found">TCEs found</th>
-            <th class="n" data-field="tces_in_range">TCEs in range</th>
-            <th class="n" data-field="quiet_signal">No-TCE stars with a signal</th>
-            <th class="n" data-field="quiet_stars">No-TCE stars</th>
+            <th class="n" data-field="sector" title="The TESS sector (one ~27-day pointing). Each row is that sector searched on its own.">Sector</th>
+            <th class="n" data-field="planets_found" title="Of the &quot;Planets SPOC detected&quot;, how many this search found again: a signal on the same star at the TOI's period (within 0.5%, or at 2×, ½×, 3× or ⅓× of it) with transits at the same times. An alias counts as found.">Planets found</th>
+            <th class="n" data-field="planets_total" title="TOIs listing this sector whose disposition is a planet or candidate (CP, KP or PC), on a star with a 2-minute light curve in the sector, for which SPOC made a TCE in this same sector (period within 0.5%, alias-aware). These are the planets the sector's own data was shown to contain.">Planets SPOC detected</th>
+            <th class="n" data-field="confirmed_found" title="Of &quot;Confirmed&quot;, how many were found again, by the same rule as &quot;Planets found&quot;.">Confirmed found</th>
+            <th class="n" data-field="confirmed_total" title="The subset of &quot;Planets SPOC detected&quot; that are confirmed (CP) or known (KP) planets; candidates (PC) are left out.">Confirmed</th>
+            <th class="n" data-field="notce_found" title="Of &quot;No-TCE candidates in data&quot;, how many this search found.">No-TCE candidates found</th>
+            <th class="n" data-field="notce_in_data" title="Planet or candidate TOIs listing this sector for which SPOC made no TCE in the sector, but whose known ephemeris, measured on this search's own detrended flux, gives at least 2 transits with data and a red-noise SNR at or above the search threshold. TOIs too weak in one sector, with too few transits, or with a period outside the search range are not counted.">No-TCE candidates in data</th>
+            <th class="n" data-field="tces_found" title="In the TCE sample, how many of SPOC's TCEs on the sampled stars this search found again (an alias counts).">TCEs found</th>
+            <th class="n" data-field="tces_in_range" title="The TCEs on the sampled TCE stars whose period is inside the search range (two transits must fit in one sector). TCEs on stars that were not sampled are not counted.">TCEs in range</th>
+            <th class="n" data-field="quiet_signal" title="Sampled stars with no TCE in the sector on which this search reported at least one signal. They are unvetted; the upside-down control shows that, as a group, they occur at the rate false alarms alone produce.">No-TCE stars with a signal</th>
+            <th class="n" data-field="quiet_stars" title="Stars drawn at random (seeded) from those the sector observed with no TCE, over every sample shown for the sector (sector 1 has a development and a hold-out sample).">No-TCE stars</th>
           </tr>
         </thead>
         <tbody data-draw="sector-body"></tbody>
       </table>
     </div>
+    <details class="tx-defs">
+      <summary>What the columns mean</summary>
+      <dl>
+        <dt>Sector</dt><dd>The TESS sector (one ~27-day pointing). Each row is that sector searched on its own.</dd>
+        <dt>Planets found</dt><dd>Of the &quot;Planets SPOC detected&quot;, how many this search found again: a signal on the same star at the TOI's period (within 0.5%, or at 2×, ½×, 3× or ⅓× of it) with transits at the same times. An alias counts as found.</dd>
+        <dt>Planets SPOC detected</dt><dd>TOIs listing this sector whose disposition is a planet or candidate (CP, KP or PC), on a star with a 2-minute light curve in the sector, for which SPOC made a TCE in this same sector (period within 0.5%, alias-aware). These are the planets the sector's own data was shown to contain.</dd>
+        <dt>Confirmed found</dt><dd>Of &quot;Confirmed&quot;, how many were found again, by the same rule as &quot;Planets found&quot;.</dd>
+        <dt>Confirmed</dt><dd>The subset of &quot;Planets SPOC detected&quot; that are confirmed (CP) or known (KP) planets; candidates (PC) are left out.</dd>
+        <dt>No-TCE candidates found</dt><dd>Of &quot;No-TCE candidates in data&quot;, how many this search found.</dd>
+        <dt>No-TCE candidates in data</dt><dd>Planet or candidate TOIs listing this sector for which SPOC made no TCE in the sector, but whose known ephemeris, measured on this search's own detrended flux, gives at least 2 transits with data and a red-noise SNR at or above the search threshold. TOIs too weak in one sector, with too few transits, or with a period outside the search range are not counted.</dd>
+        <dt>TCEs found</dt><dd>In the TCE sample, how many of SPOC's TCEs on the sampled stars this search found again (an alias counts).</dd>
+        <dt>TCEs in range</dt><dd>The TCEs on the sampled TCE stars whose period is inside the search range (two transits must fit in one sector). TCEs on stars that were not sampled are not counted.</dd>
+        <dt>No-TCE stars with a signal</dt><dd>Sampled stars with no TCE in the sector on which this search reported at least one signal. They are unvetted; the upside-down control shows that, as a group, they occur at the rate false alarms alone produce.</dd>
+        <dt>No-TCE stars</dt><dd>Stars drawn at random (seeded) from those the sector observed with no TCE, over every sample shown for the sector (sector 1 has a development and a hold-out sample).</dd>
+      </dl>
+    </details>
   </section>
 
   <div class="tx-bar tx-sectorbar">
@@ -250,22 +271,38 @@
       <table data-source="variants" data-row-key="variant">
         <thead>
           <tr>
-            <th data-field="variant">Variant</th>
-            <th data-field="detrending">Detrending</th>
-            <th class="n" data-field="planets_recovered">Planets found</th>
-            <th class="n" data-field="planets_total">Planets SPOC detected</th>
-            <th class="n" data-field="dev_tces_recovered">Development TCEs found</th>
-            <th class="n" data-field="dev_tces_total">Development TCEs</th>
-            <th class="n" data-field="dev_quiet_with_signal">Development stars with no TCE but a signal</th>
-            <th class="n" data-field="holdout_tces_recovered">Hold-out TCEs found</th>
-            <th class="n" data-field="holdout_tces_total">Hold-out TCEs</th>
-            <th class="n" data-field="holdout_quiet_with_signal">Hold-out stars with no TCE but a signal</th>
-            <th class="n" data-field="seconds_per_star">Seconds per star</th>
+            <th data-field="variant" title="The version of the search: each row is one detrending, everything else as it was then. The current default is marked.">Variant</th>
+            <th data-field="detrending" title="How stellar variability and spacecraft trends were removed before the box search.">Detrending</th>
+            <th class="n" data-field="planets_recovered" title="Of &quot;Planets SPOC detected&quot;, how many this variant found again in sector 1 (same rule as in the table above).">Planets found</th>
+            <th class="n" data-field="planets_total" title="Sector 1's planet and candidate TOIs (CP, KP, PC) that SPOC made a sector-1 TCE for, on stars with a 2-minute light curve.">Planets SPOC detected</th>
+            <th class="n" data-field="dev_tces_recovered" title="In the development sample (60 TCE stars spread over SPOC's SNR range and 40 random no-TCE stars, seed 1), how many TCEs were found again (an alias counts). The search was tuned on this sample.">Development TCEs found</th>
+            <th class="n" data-field="dev_tces_total" title="The development sample's TCEs whose period is inside the search range.">Development TCEs</th>
+            <th class="n" data-field="dev_quiet_with_signal" title="Of the development sample's 40 no-TCE stars, how many got a signal from this variant.">Development stars with no TCE but a signal</th>
+            <th class="n" data-field="holdout_tces_recovered" title="The same as &quot;Development TCEs found&quot;, on the hold-out sample: drawn with seed 2 and sharing no star with the development sample, so a variant tuned on development is scored on stars it never saw.">Hold-out TCEs found</th>
+            <th class="n" data-field="holdout_tces_total" title="The hold-out sample's TCEs whose period is inside the search range.">Hold-out TCEs</th>
+            <th class="n" data-field="holdout_quiet_with_signal" title="Of the hold-out sample's 40 no-TCE stars, how many got a signal.">Hold-out stars with no TCE but a signal</th>
+            <th class="n" data-field="seconds_per_star" title="The median time to fetch, detrend and search one star in the development sample, for one search process (the run used 8 or 12 in parallel). Comparable between variants, not a sector's wall clock.">Seconds per star</th>
           </tr>
         </thead>
         <tbody data-draw="variants-body"></tbody>
       </table>
     </div>
+    <details class="tx-defs">
+      <summary>What the columns mean</summary>
+      <dl>
+        <dt>Variant</dt><dd>The version of the search: each row is one detrending, everything else as it was then. The current default is marked.</dd>
+        <dt>Detrending</dt><dd>How stellar variability and spacecraft trends were removed before the box search.</dd>
+        <dt>Planets found</dt><dd>Of &quot;Planets SPOC detected&quot;, how many this variant found again in sector 1 (same rule as in the table above).</dd>
+        <dt>Planets SPOC detected</dt><dd>Sector 1's planet and candidate TOIs (CP, KP, PC) that SPOC made a sector-1 TCE for, on stars with a 2-minute light curve.</dd>
+        <dt>Development TCEs found</dt><dd>In the development sample (60 TCE stars spread over SPOC's SNR range and 40 random no-TCE stars, seed 1), how many TCEs were found again (an alias counts). The search was tuned on this sample.</dd>
+        <dt>Development TCEs</dt><dd>The development sample's TCEs whose period is inside the search range.</dd>
+        <dt>Development stars with no TCE but a signal</dt><dd>Of the development sample's 40 no-TCE stars, how many got a signal from this variant.</dd>
+        <dt>Hold-out TCEs found</dt><dd>The same as &quot;Development TCEs found&quot;, on the hold-out sample: drawn with seed 2 and sharing no star with the development sample, so a variant tuned on development is scored on stars it never saw.</dd>
+        <dt>Hold-out TCEs</dt><dd>The hold-out sample's TCEs whose period is inside the search range.</dd>
+        <dt>Hold-out stars with no TCE but a signal</dt><dd>Of the hold-out sample's 40 no-TCE stars, how many got a signal.</dd>
+        <dt>Seconds per star</dt><dd>The median time to fetch, detrend and search one star in the development sample, for one search process (the run used 8 or 12 in parallel). Comparable between variants, not a sector's wall clock.</dd>
+      </dl>
+    </details>
   </section>
 
   <section class="tx-card" id="missed">

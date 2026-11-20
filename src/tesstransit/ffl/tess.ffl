@@ -47,7 +47,11 @@ namespace tess {
       * with `seed`, avoiding every star the `holdout_of` runs searched.
       *
       * ⚠️ One chunk is one step. A star takes ~5 s and a step costs ~2.6 s of
-      * overhead, so chunks of tens of stars, not one star per step. */
+      * overhead, so chunks of tens of stars, not one star per step.
+      *
+      * The draw depends on `seed` and `holdout_of` alone, so an upside-down
+      * control with the same seed searches the same stars (give it its own
+      * `label`, or it shares the run directory). */
     event facet Plan(
         sector: Int,
         kind: String,
@@ -68,9 +72,19 @@ namespace tess {
       * pre-whitening below 1.5 d unless switched off), run BLS, and measure
       * any forced ephemerides on the same flattened flux.
       *
+      * `invert = true` searches 2 - flux (`pilot --invert`): no real transit
+      * survives that, so every signal is a false alarm. `set` overrides
+      * SearchConfig fields, as `--set FIELD=VALUE` does.
+      *
       * A star that fails is recorded with its error, never dropped, and
       * counted in `failed`. Every attempt rewrites the chunk's results whole. */
-    event facet SearchChunk(chunk_path: String, prewhiten: Boolean = true, workers: Int = 4) => (
+    event facet SearchChunk(
+        chunk_path: String,
+        prewhiten: Boolean = true,
+        workers: Int = 4,
+        invert: Boolean = false,
+        set: Json = []
+    ) => (
         results_path: String, searched: Long, failed: Long
     ) with Effect(kind = "external") with Cost(tier = "moderate") with Timeout(minutes = 60)
 
@@ -79,7 +93,9 @@ namespace tess {
       * summary.json).
       *
       * ⚠️ Refuses a star that appears in two chunks rather than counting it
-      * twice. `site_arg` is the run in the form BuildSite takes. */
+      * twice. `site_arg` is the run in the form BuildSite takes. `invert` and
+      * `set` must be what the chunks were searched with: they are recorded
+      * in summary.json. `invert` is for `kind = "sample"` only. */
     event facet MatchSector(
         sector: Int,
         kind: String,
@@ -93,7 +109,9 @@ namespace tess {
         n_quiet: Int = 40,
         seed: Int = 1,
         holdout_of: Json = [],
-        sample_label: String = "Sample"
+        sample_label: String = "Sample",
+        invert: Boolean = false,
+        set: Json = []
     ) => (run_dir: String, summary_path: String, stars: Long, failed: Long, found: Long, site_arg: String)
         with Effect(kind = "io") with Cost(tier = "free")
 
@@ -101,14 +119,19 @@ namespace tess {
       *
       * `planets` are "SECTOR=RUN_DIR", `samples` "SECTOR=LABEL=RUN_DIR" (each
       * MatchSector's `site_arg`). `variants` are optional sector-1 scorecard
-      * rows, "name|detrending|planets-run|dev-run|holdout-run". */
+      * rows, "name|detrending|planets-run|dev-run|holdout-run". `stitched`
+      * (one year stitched) and `long_stitched` (two years) are samples
+      * "label|settings|run|inverted-run|adopted", adopted being yes or no;
+      * each fills its own section of the page. */
     event facet BuildSite(
         planets: Json,
         samples: Json,
         lc_dir: String,
         out_dir: String,
         variants: Json = [],
-        default: String = ""
+        default: String = "",
+        stitched: Json = [],
+        long_stitched: Json = []
     ) => (output_dir: String, page_path: String, bytes: Long)
         with Effect(kind = "external") with Cost(tier = "free")
 }
@@ -171,16 +194,88 @@ namespace tess.stitch {
     ) with Effect(kind = "io") with Cost(tier = "free")
 }
 
+namespace tess.check {
+
+    /** Injection-recovery (`inject.py`): synthetic transits put into the REAL
+      * flux of a sample run's stars without a TCE, before detrending, each
+      * light curve carrying one and searched with the unchanged search.
+      * `per_star` injections per star; period log-uniform 0.5-13 d, expected
+      * (white-noise) SNR log-uniform 4-40.
+      *
+      * `sample` is a sample run in MatchSector's `site_arg` form
+      * ("SECTOR=LABEL=RUN_DIR"). `tce_dir` holds the sector's
+      * `sNNNN_tcestats.csv` (TCETable's `dest_dir`) and `lc_dir` its manifest
+      * (Targets' `dest_dir`). The results go to `<out_dir>/<run>-inject`,
+      * `<run>` the sample run's directory name. `replay` is an earlier run's injections.jsonl:
+      * the SAME transits searched again, for a paired comparison of two
+      * settings. Writes injections.jsonl, injections.csv and summary.json. */
+    event facet Inject(
+        sample: String,
+        tce_dir: String,
+        lc_dir: String,
+        out_dir: String,
+        per_star: Int = 6,
+        seed: Int = 1,
+        workers: Int = 8,
+        prewhiten: Boolean = true,
+        set: Json = [],
+        replay: String = ""
+    ) => (run_dir: String, summary_path: String, injections: Long, found: Long, failed: Long)
+        with Effect(kind = "external") with Cost(tier = "moderate") with Timeout(minutes = 240)
+
+    /** Shape tests (`vet.py`): odd/even depths, an eclipse at phase 0.5 and a
+      * V shape, at our matched signal's ephemeris, for every TOI a planet run
+      * recovered whose disposition is CP, KP or EB. `planets` are planet
+      * runs in MatchSector's `site_arg` form ("SECTOR=RUN_DIR"). Writes vet.csv.
+      *
+      * ⚠️ Most EB TOIs pass: a diluted background binary looks like a planet
+      * in shape and needs a centroid test, which this is not. */
+    event facet Vet(planets: Json, lc_dir: String, out_dir: String, workers: Int = 8) => (
+        out_dir: String, csv_path: String, signals: Long, flagged: Long, failed: Long
+    ) with Effect(kind = "external") with Cost(tier = "moderate") with Timeout(minutes = 120)
+
+    /** Transit timing (`ttv.py`): each transit timed on the stitched light
+      * curve of `sectors`, O - C against the best fixed period. Times the
+      * TOIs in `tois` (e.g. "216.01", read from `toi_path`) and/or every
+      * signal with at least `min_transits` transits in the stitched run
+      * `from_run`. `lc_dir` holds every sector's manifest. Writes ttv.jsonl.
+      *
+      * ⚠️ chi2_dof is not a detection statistic: on 201 ordinary stitched
+      * signals its median was 33, and below ~5 SNR per transit the times are
+      * noise. A large value is a candidate until its O - C curve is read. */
+    event facet Timing(
+        sectors: Json,
+        lc_dir: String,
+        out_dir: String,
+        tois: Json = [],
+        toi_path: String = "",
+        from_run: String = "",
+        min_transits: Int = 4,
+        bin_minutes: Double = 10.0,
+        workers: Int = 8
+    ) => (out_dir: String, jsonl_path: String, signals: Long, timed: Long, failed: Long)
+        with Effect(kind = "external") with Cost(tier = "expensive") with Timeout(minutes = 480)
+}
+
 namespace tess.workflows {
 
     /** Search every chunk of a plan, `width` at a time (0 = unbounded). */
-    facet SearchEach(chunks: Json, prewhiten: Boolean, workers: Int, width: Int) => (results: Json)
+    facet SearchEach(
+        chunks: Json, prewhiten: Boolean, workers: Int, width: Int,
+        invert: Boolean = false, set: Json = []
+    ) => (results: Json)
         andThen foreach c in $.chunks limit $.width {
-            one = tess.SearchChunk(chunk_path = $.c, prewhiten = $.prewhiten, workers = $.workers)
+            one = tess.SearchChunk(
+                chunk_path = $.c, prewhiten = $.prewhiten, workers = $.workers,
+                invert = $.invert, set = $.set
+            )
             yield SearchEach(results += one.results_path)
         }
 
-    /** One sector, one kind: plan, search the chunks, match. */
+    /** One sector, one kind: plan, search the chunks, match.
+      *
+      * `invert = true` with `kind = "sample"` is the false-alarm control
+      * (`pilot --invert`); `set` overrides SearchConfig fields. */
     workflow SectorRun(
         sector: Int,
         work_dir: String,
@@ -197,7 +292,9 @@ namespace tess.workflows {
         n_quiet: Int = 40,
         seed: Int = 1,
         holdout_of: Json = [],
-        sample_label: String = "Sample"
+        sample_label: String = "Sample",
+        invert: Boolean = false,
+        set: Json = []
     ) => (run_dir: String, stars: Long, failed: Long, found: Long, site_arg: String) andThen {
         plan = tess.Plan(
             sector = $.sector, kind = $.kind, work_dir = $.work_dir, label = $.label,
@@ -206,14 +303,16 @@ namespace tess.workflows {
             seed = $.seed, holdout_of = $.holdout_of
         )
         searched = SearchEach(
-            chunks = plan.chunks, prewhiten = $.prewhiten, workers = $.workers, width = $.width
+            chunks = plan.chunks, prewhiten = $.prewhiten, workers = $.workers, width = $.width,
+            invert = $.invert, set = $.set
         )
         matched = tess.MatchSector(
             sector = $.sector, kind = $.kind, run_dir = plan.run_dir,
             results_paths = searched.results, targets_path = $.targets_path,
             tce_path = $.tce_path, toi_path = $.toi_path, prewhiten = $.prewhiten,
             n_tce = $.n_tce, n_quiet = $.n_quiet, seed = $.seed,
-            holdout_of = $.holdout_of, sample_label = $.sample_label
+            holdout_of = $.holdout_of, sample_label = $.sample_label,
+            invert = $.invert, set = $.set
         )
         yield SectorRun(
             run_dir = matched.run_dir, stars = matched.stars, failed = matched.failed,
@@ -334,9 +433,8 @@ namespace tess.workflows {
       * sample searched as observed and upside down (no real transit
       * survives inversion, so every signal there is a false alarm), each
       * pass scored into its own run directory, `<label>` and `<label>-inv`.
-      *
-      * `site_arg` is the pair in the form BuildSite's `--stitched` takes
-      * (`label|settings|run|inverted-run|adopted`), minus the settings text. */
+      * For the results page, pass the pair to BuildSite's `long_stitched`
+      * (or `stitched`) as "label|settings|run_dir|inverted_run_dir|yes". */
     workflow StitchedSample(
         sectors: Json,
         work_dir: String,
@@ -383,4 +481,160 @@ namespace tess.workflows {
             inverted_quiet_with_signal = inv.quiet_with_signal, toi_sha256 = tois.sha256
         )
     }
+
+    /** For each sector: its TCE table and star list, then the TCE/no-TCE
+      * sample searched upside down. */
+    facet FalseAlarmEach(
+        sectors: Json,
+        work_dir: String,
+        toi_path: String,
+        sector_width: Int,
+        chunk_size: Int,
+        width: Int,
+        workers: Int,
+        prewhiten: Boolean,
+        n_tce: Int,
+        n_quiet: Int,
+        seed: Int
+    ) => (samples: Json, failed: Json)
+        andThen foreach s in $.sectors limit $.sector_width {
+            tce = tess.source.TCETable(sector = $.s, dest_dir = $.work_dir)
+            targets = tess.source.Targets(sector = $.s, dest_dir = $.work_dir ++ "/lc")
+            q = SectorRun(
+                sector = $.s, kind = "sample", label = "inv", work_dir = $.work_dir,
+                targets_path = targets.path, tce_path = tce.path, toi_path = $.toi_path,
+                chunk_size = $.chunk_size, width = $.width, workers = $.workers,
+                prewhiten = $.prewhiten, n_tce = $.n_tce, n_quiet = $.n_quiet, seed = $.seed,
+                invert = true, sample_label = "Upside down"
+            )
+            yield FalseAlarmEach(samples += q.site_arg, failed += q.failed)
+        }
+
+    /** The false-alarm control for SearchSectors: each sector's sample (same
+      * `seed`, so the same stars) searched upside down (`pilot --invert`),
+      * into `<work_dir>/s<N>-sample-inv`.
+      *
+      * ⚠️ Count signals on the no-TCE stars only. A deep real transit comes
+      * back upside down at P, P/2 and P/3, so most TCE stars light up. */
+    workflow FalseAlarms(
+        sectors: Json,
+        work_dir: String,
+        toi_url: String = "https://archive.stsci.edu/missions/tess/catalogs/toi/tois.csv",
+        toi_max_age_hours: Double = 24.0,
+        sector_width: Int = 2,
+        chunk_size: Int = 50,
+        width: Int = 0,
+        workers: Int = 4,
+        prewhiten: Boolean = true,
+        n_tce: Int = 60,
+        n_quiet: Int = 40,
+        seed: Int = 1
+    ) => (samples: Json, failed: Json, toi_sha256: String) andThen {
+        tois = fw.http.Fetch(
+            url = $.toi_url, dest = $.work_dir ++ "/tois.csv", max_age_hours = $.toi_max_age_hours
+        )
+        each = FalseAlarmEach(
+            sectors = $.sectors, work_dir = $.work_dir, toi_path = tois.path,
+            sector_width = $.sector_width, chunk_size = $.chunk_size, width = $.width,
+            workers = $.workers, prewhiten = $.prewhiten, n_tce = $.n_tce,
+            n_quiet = $.n_quiet, seed = $.seed
+        )
+        yield FalseAlarms(samples = each.samples, failed = each.failed, toi_sha256 = tois.sha256)
+    }
+
+    /** Injection-recovery over each sample run, `width` at a time. */
+    facet InjectEach(
+        samples: Json, work_dir: String, per_star: Int, seed: Int, workers: Int,
+        width: Int, prewhiten: Boolean, set: Json
+    ) => (runs: Json, injections: Json, found: Json)
+        andThen foreach a in $.samples limit $.width {
+            one = tess.check.Inject(
+                sample = $.a, tce_dir = $.work_dir, lc_dir = $.work_dir ++ "/lc",
+                out_dir = $.work_dir, per_star = $.per_star, seed = $.seed,
+                workers = $.workers, prewhiten = $.prewhiten, set = $.set
+            )
+            yield InjectEach(runs += one.run_dir, injections += one.injections, found += one.found)
+        }
+
+    /** Completeness: injection-recovery over finished sample runs
+      * ("SECTOR=LABEL=RUN_DIR", e.g. SearchSectors' `samples`), with the
+      * TCE tables and manifests where SearchSectors put them under
+      * `work_dir`. One run directory per sample, `<run>-inject`. */
+    workflow Completeness(
+        samples: Json,
+        work_dir: String,
+        per_star: Int = 6,
+        seed: Int = 1,
+        workers: Int = 8,
+        width: Int = 2,
+        prewhiten: Boolean = true,
+        set: Json = []
+    ) => (runs: Json, injections: Json, found: Json) andThen {
+        each = InjectEach(
+            samples = $.samples, work_dir = $.work_dir, per_star = $.per_star,
+            seed = $.seed, workers = $.workers, width = $.width,
+            prewhiten = $.prewhiten, set = $.set
+        )
+        yield Completeness(runs = each.runs, injections = each.injections, found = each.found)
+    }
+
+    /** Shape tests over finished planet runs ("SECTOR=RUN_DIR", e.g.
+      * SearchSectors' `planets`), into `<work_dir>/vet`. */
+    workflow VetPlanets(planets: Json, work_dir: String, workers: Int = 8) => (
+        csv_path: String, signals: Long, flagged: Long, failed: Long
+    ) andThen {
+        v = tess.check.Vet(
+            planets = $.planets, lc_dir = $.work_dir ++ "/lc", out_dir = $.work_dir ++ "/vet",
+            workers = $.workers
+        )
+        yield VetPlanets(csv_path = v.csv_path, signals = v.signals, flagged = v.flagged, failed = v.failed)
+    }
+
+    /** Transit timing of named TOIs on a stitched light curve, against
+      * today's TOI catalogue (for their ephemerides), into `out_dir`. */
+    workflow TimeTOIs(
+        sectors: Json,
+        tois: Json,
+        work_dir: String,
+        out_dir: String,
+        from_run: String = "",
+        min_transits: Int = 4,
+        workers: Int = 8,
+        manifest_width: Int = 4,
+        toi_url: String = "https://archive.stsci.edu/missions/tess/catalogs/toi/tois.csv",
+        toi_max_age_hours: Double = 24.0
+    ) => (jsonl_path: String, signals: Long, timed: Long, failed: Long) andThen {
+        cat = fw.http.Fetch(
+            url = $.toi_url, dest = $.work_dir ++ "/tois.csv", max_age_hours = $.toi_max_age_hours
+        )
+        lists = ManifestEach(sectors = $.sectors, dest_dir = $.work_dir ++ "/lc", width = $.manifest_width)
+        t = tess.check.Timing(
+            sectors = $.sectors, lc_dir = $.work_dir ++ "/lc", out_dir = $.out_dir,
+            tois = $.tois, toi_path = cat.path, from_run = $.from_run,
+            min_transits = $.min_transits, workers = $.workers
+        ) after lists
+        yield TimeTOIs(jsonl_path = t.jsonl_path, signals = t.signals, timed = t.timed, failed = t.failed)
+    }
+
+    /** The results page over finished runs, without searching anything: the
+      * page as published, rebuilt from its run directories. Arguments are
+      * BuildSite's. */
+    workflow BuildPage(
+        planets: Json,
+        samples: Json,
+        work_dir: String,
+        out_dir: String,
+        variants: Json = [],
+        default: String = "",
+        stitched: Json = [],
+        long_stitched: Json = []
+    ) => (page_path: String, output_dir: String, bytes: Long) andThen {
+        site = tess.BuildSite(
+            planets = $.planets, samples = $.samples, variants = $.variants,
+            default = $.default, stitched = $.stitched, long_stitched = $.long_stitched,
+            lc_dir = $.work_dir ++ "/lc", out_dir = $.out_dir
+        )
+        yield BuildPage(page_path = site.page_path, output_dir = site.output_dir, bytes = site.bytes)
+    }
+
 }

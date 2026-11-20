@@ -1469,3 +1469,69 @@ sector group, so signals on no-TCE stars remain false alarms as a group, and
 nothing on the site changes. The paired differences are not significant in
 either direction; a modest sector effect is not excluded, only shown to be
 much smaller than the population effect.
+
+## The stitched search on the fleet (2026-11-17 to 11-20)
+
+The same 140 stars as South A (`ms26-fresh`: sectors 1-13 + 27-39, 40 TCE
+and 100 quiet stars, SDE 18) were searched again three times as
+`tess.workflows.StitchedSample` on the fleet (`sample_of` the CLI run, 47
+chunks of 3 stars, 3 workers per chunk), to check that the fleet gives the
+same answer and to measure what each scheduling change did. The reference is
+the CLI run on the fastest host alone (16 cores, 12 workers): 5.3 h as
+observed plus 6.0 h upside down, 11.3 h in all, median 948 s per star.
+
+| run | what changed | wall clock | median s/star | slowest host's chunks | results against the CLI run |
+|---|---|---|---|---|---|
+| `ms26-fresh-fleet` | CPUs booked when claiming (a host runs only as many 3-CPU chunks as it has CPUs) | **12.3 h** | 2,184 | several, first wave, 9-12 h each | observed 140/140 the same signals; upside down 139/140 |
+| `ms26-fresh-fleet2` | `Placement(prefer = "fast")` on the chunks | **14.9 h** | — | 4, first wave, 10-15 h each | the same except SDE in the second decimal; the 140th inverted star now matches |
+| `ms26-fresh-fleet3` | the placement fix below | **14.1 h**, of which ~3 h was redone work | 1,973 | **0** | 139/140 and 137/140 identical signal lists; the rest differ in SDE by at most 0.24 |
+
+What each run showed:
+
+- **Booking CPUs removed the oversubscription.** Before it, South B (2026-11-15)
+  had hosts running up to 30 search processes on 12 CPUs, and a chunk on the
+  most loaded host took 55,112 s against 6,740 s on the fastest. With booking,
+  the chunks in flight on each host were its CPUs divided by 3.
+- **The tail was the slowest hosts' first chunks.** Each host claimed chunks
+  in the first wave, and a chunk took 3,808 s on the fastest host and
+  10,629-26,884 s on the other four (median per host, from the handler
+  timings). The run then waited on the slowest host's last chunk.
+- **Placement had a defect, then worked.** `Placement(prefer = "fast")` lets a
+  slower host take a chunk only if it would finish before the faster hosts
+  could get to it. In run 2 the slowest host still took 4 first-wave chunks:
+  the placement check had cached "nothing waiting" from before the chunks
+  existed and kept that answer for 30 s. Not caching an empty queue fixed it
+  (facetwork d7e49e22). In run 3 the slowest host took no chunks.
+- **Run 3 lost 18 chunks to an operations mistake, not to the search.** About
+  3 h in, a change to the fleet's compose file was pulled onto the hosts while
+  the run was going, and every runner was recreated. The 18 running chunks
+  were reclaimed and searched again from the start. The fleet agent now keeps
+  its applied version when it reloads itself (facetwork 0ceed89c), so such a
+  change waits for the next rollout.
+- **The answer does not depend on the host.** Across the three runs every
+  observed signal list matches the CLI run, apart from SDE values differing in
+  the first or second decimal (floating point on different CPUs). One
+  upside-down star (TIC 278731274) had a 201.9 d SDE 69.4 signal in the CLI
+  run, none in run 1 and the same signal again in run 2: its search ends at the
+  veto limit, and which side of it a host lands on can change.
+- **For 140 stars the fleet is not faster than the fastest host alone.**
+  11.3 h on one host against 12.3-14.9 h on the fleet. The fastest host finishes a
+  chunk 3 to 7 times sooner than the others, so the fleet's gain is only the
+  extra chunks in flight, and a sample of 47 chunks does not use them for long. The fleet pays off for larger samples (South B, 300 stars, 100 chunks).
+- **The fastest host is also a desktop.** With placement keeping all its slots
+  busy its load average sat near 21 on 16 cores and the desktop stalled. It now
+  keeps 4 CPUs for itself (`fw fleet set --cpu-reserve HOST=4`, facetwork
+  bc857395), so it runs 4 chunks instead of 5. No run has been timed with the
+  reserve yet.
+
+## Every tool runs as FFL (2026-11-20)
+
+The tools that had no workflow got one: the upside-down control of a sector
+sample (`SectorRun(invert = true)`, every sector `FalseAlarms`), injection-
+recovery (`Completeness`), shape tests (`VetPlanets`), transit timing
+(`TimeTOIs`), and the results page over finished runs with both stitched
+sections (`BuildPage`, published by `tess.publish.PublishPage`). Each was run
+the same day as its CLI over the same inputs, and the files agree:
+[workflows.md](workflows.md) has the table. The published page rebuilt by
+`BuildPage` from its 140 run directories is byte for byte the 2026-11-16 build
+except the snapshot date.

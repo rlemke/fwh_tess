@@ -19,12 +19,25 @@ The facets in play:
 | `tess` | `Plan(sector, kind, work_dir, targets_path, tce_path, toi_path, …)` | `chunks, stars, run_dir` |
 | `tess` | `SearchChunk(chunk_path, prewhiten, workers)` | `results_path, searched, failed` |
 | `tess` | `MatchSector(sector, kind, run_dir, results_paths, …)` | `run_dir, summary_path, stars, failed, found, site_arg` |
-| `tess` | `BuildSite(planets, samples, lc_dir, out_dir, variants, default)` | `output_dir, page_path, bytes` |
+| `tess` | `SearchChunk(chunk_path, prewhiten, workers, invert, set)` | (the same) |
+| `tess` | `BuildSite(planets, samples, lc_dir, out_dir, variants, default, stitched, long_stitched)` | `output_dir, page_path, bytes` |
+| `tess.source` | `StitchTCETable(sectors, dest_dir)` | `path, url, tces` |
+| `tess.stitch` | `Plan` / `SearchChunk` / `Match` | the stitched search, both passes per chunk |
+| `tess.check` | `Inject(sample, tce_dir, lc_dir, out_dir, per_star, seed, …)` | `run_dir, summary_path, injections, found, failed` |
+| `tess.check` | `Vet(planets, lc_dir, out_dir, workers)` | `out_dir, csv_path, signals, flagged, failed` |
+| `tess.check` | `Timing(sectors, lc_dir, out_dir, tois, toi_path, from_run, …)` | `out_dir, jsonl_path, signals, timed, failed` |
+
+(The table lists `SearchChunk` twice only to show its newer parameters.)
 
 And the workflows built from them: `tess.workflows.SectorRun` (one sector, one
-kind), `SearchSectors` (many sectors, both kinds), `BuildResults` (those plus
-the page), and `tess.publish.PublishResults` (plus publishing; in
-`tess_site.ffl`, which needs fwh_census_us).
+kind), `SearchSectors` (many sectors, both kinds), `FalseAlarms` (each
+sector's sample upside down), `BuildResults` (sectors plus the page),
+`StitchedSample` (a stitched sample, both passes), `Completeness`
+(injection-recovery), `VetPlanets` (shape tests), `TimeTOIs` (transit
+timing), `BuildPage` (the page over finished runs), and
+`tess.publish.PublishResults` / `PublishPage` (plus publishing; in
+`tess_site.ffl`, which needs fwh_census_us). Which CLI each one stands for:
+[workflows.md](workflows.md).
 
 `kind` is `"planets"` (every TOI star in the sector, with each TOI's ephemeris
 measured on our flux) or `"sample"` (`n_tce` TCE stars and `n_quiet` stars
@@ -189,6 +202,87 @@ namespace ex.stitched {
         )
         yield SouthYears1and3(run_dir = s.run_dir, inverted_run_dir = s.inverted_run_dir,
                               upside_down_hits = s.inverted_quiet_with_signal)
+    }
+}
+```
+
+## 8. The false-alarm control
+
+The upside-down control is the sample searched as `2 - flux`: no real transit
+survives that, so whatever it still reports is a false alarm. Same `seed`,
+same stars; its own `label`, so its own run directory. `FalseAlarms` does
+this for every sector of a `SearchSectors` run.
+
+```ffl
+namespace ex.control {
+    workflow SampleAndControl(work_dir: String, targets_path: String, tce_path: String, toi_path: String) => (found: Long, upside_down: String) andThen {
+        obs = tess.workflows.SectorRun(sector = 1, kind = "sample", seed = 1,
+                                       work_dir = $.work_dir, targets_path = $.targets_path,
+                                       tce_path = $.tce_path, toi_path = $.toi_path)
+        inv = tess.workflows.SectorRun(sector = 1, kind = "sample", seed = 1, label = "inv",
+                                       invert = true, sample_label = "Upside down",
+                                       work_dir = $.work_dir, targets_path = $.targets_path,
+                                       tce_path = $.tce_path, toi_path = $.toi_path)
+        yield SampleAndControl(found = obs.found, upside_down = inv.run_dir)
+    }
+}
+```
+
+⚠️ Count the control's signals on the no-TCE stars only: a deep real transit
+comes back upside down at P, P/2 and P/3.
+
+## 9. Completeness, then shape tests
+
+Every sector's runs, then injection-recovery on the samples and shape tests on
+the planet runs. Both read the TCE tables and manifests where `SearchSectors`
+left them, so they need only its outputs and the same `work_dir`.
+
+```ffl
+namespace ex.checks {
+    workflow YearOneChecks(work_dir: String) => (injections: Json, found: Json, vetted: Long, binary_like: Long) andThen {
+        runs = tess.workflows.SearchSectors(sectors = [1, 2, 3], work_dir = $.work_dir)
+        comp = tess.workflows.Completeness(samples = runs.samples, work_dir = $.work_dir,
+                                           per_star = 6, width = 2)
+        shape = tess.workflows.VetPlanets(planets = runs.planets, work_dir = $.work_dir)
+        yield YearOneChecks(injections = comp.injections, found = comp.found,
+                            vetted = shape.signals, binary_like = shape.flagged)
+    }
+}
+```
+
+## 10. Transit timing of a resonant pair
+
+TOI 216's two planets swap energy, so their transits arrive early and late in
+turn. `TimeTOIs` lists each sector's stars, stitches the year and times every
+transit. Read the O - C curve before calling a large `chi2_dof` a detection.
+
+```ffl
+namespace ex.timing {
+    workflow TOI216(work_dir: String) => (jsonl: String, timed: Long) andThen {
+        t = tess.workflows.TimeTOIs(sectors = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+                                    tois = ["216.01", "216.02"], work_dir = $.work_dir,
+                                    out_dir = $.work_dir ++ "/ttv-toi216")
+        yield TOI216(jsonl = t.jsonl_path, timed = t.timed)
+    }
+}
+```
+
+## 11. The page over finished runs
+
+`BuildPage` searches nothing: it is the results page over run directories that
+exist already, including both stitched sections. The published page is this
+workflow over the runs [workflows.md](workflows.md) lists, and
+`tess.publish.PublishPage` (in `tess_site.ffl`) also publishes it.
+
+```ffl
+namespace ex.page {
+    workflow TwoSectorsAndOneStitch(work_dir: String) => (page: String) andThen {
+        p = tess.workflows.BuildPage(
+            planets = ["1=" ++ $.work_dir ++ "/s1-planets", "2=" ++ $.work_dir ++ "/s2-planets"],
+            samples = ["1=Sample=" ++ $.work_dir ++ "/s1-sample"],
+            long_stitched = ["South A|SDE 18|" ++ $.work_dir ++ "/south-a|" ++ $.work_dir ++ "/south-a-inv|yes"],
+            work_dir = $.work_dir, out_dir = $.work_dir ++ "/site")
+        yield TwoSectorsAndOneStitch(page = p.page_path)
     }
 }
 ```

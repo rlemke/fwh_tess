@@ -52,4 +52,41 @@ namespace tess.publish {
             toi_sha256 = built.toi_sha256
         )
     }
+
+    /** Publish the page over finished runs, searching nothing: the published
+      * page (per-sector runs, the one-year and two-year stitched samples) is
+      * this workflow over the run directories it names. Arguments are
+      * tess.BuildSite's; `out_dir` is where the page is built first. */
+    workflow PublishPage(
+        planets: Json,
+        samples: Json,
+        work_dir: String,
+        out_dir: String,
+        variants: Json = [],
+        default: String = "",
+        stitched: Json = [],
+        long_stitched: Json = [],
+        repo: String = "rlemke/facetwork-maps",
+        dest: String = "space/tess-sector1",
+        label: String = "TESS transit re-search"
+    ) => (pages_url: String, files: Long, commit: String, page_path: String) andThen {
+        built = tess.workflows.BuildPage(
+            planets = $.planets, samples = $.samples, work_dir = $.work_dir,
+            out_dir = $.out_dir, variants = $.variants, default = $.default,
+            stitched = $.stitched, long_stitched = $.long_stitched
+        )
+        published = PublishWebBundle(
+            repo = $.repo,
+            prefixes = [built.output_dir],
+            dests = [$.dest],
+            include = [".html"],
+            labels = [$.label]
+        )
+        yield PublishPage(
+            pages_url = published.pages_url,
+            files = published.file_count,
+            commit = published.commit,
+            page_path = built.page_path
+        )
+    }
 }

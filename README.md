@@ -22,8 +22,10 @@ candidates in range over three samples, with an upside-down false-alarm rate
 of 4.6%. The results page shows all 55:
 <https://rlemke.github.io/facetwork-maps/space/tess-sector1/>.
 
-A Facetwork domain (`tess`): the command-line tools and the FFL workflows run
-the same code, so either way gives the same files.
+A Facetwork domain (`tess`): every command-line tool has an FFL workflow that
+runs the same code, so either way gives the same files (checked tool by tool
+in [docs/workflows.md](docs/workflows.md), and the published page rebuilds
+from its runs byte for byte).
 
 ## FFL at a glance
 
@@ -42,9 +44,18 @@ namespace demo {
 }
 ```
 
-Every sector end to end: `tess.workflows.SearchSectors` (runs) or
-`tess.workflows.BuildResults` (runs + page); `tess.publish.PublishResults` also
-publishes. Full gallery: [`docs/ffl-examples.md`](docs/ffl-examples.md).
+| Workflow | Stands for |
+|---|---|
+| `tess.workflows.SectorRun` | `pilot` (`kind = "sample"`, with `invert = true` its upside-down control) or `planets` (`kind = "planets"`) for one sector |
+| `SearchSectors` / `FalseAlarms` | both kinds for many sectors / their upside-down controls |
+| `StitchedSample` | `multisector`: a stitched sample as observed and upside down, one chunk per step, spread over the fleet |
+| `Completeness` | `inject`: injection-recovery in a sample's no-TCE stars |
+| `VetPlanets` | `vet`: shape tests on the recovered planets and binaries |
+| `TimeTOIs` | `ttv`: transit timing on the stitched light curve |
+| `BuildPage` / `BuildResults` | `site`: the page over finished runs / search first, then the page |
+| `tess.publish.PublishPage` / `PublishResults` | the same, then published (`tess_site.ffl`, needs fwh_census_us) |
+
+Full gallery: [`docs/ffl-examples.md`](docs/ffl-examples.md).
 
 ## Data (measured 2026-11-04)
 
@@ -55,7 +66,9 @@ publishes. Full gallery: [`docs/ffl-examples.md`](docs/ffl-examples.md).
 
 Light curves are streamed and can be discarded: only per-star results are kept.
 
-Each experiment and what it changed is in [docs/experiments.md](docs/experiments.md).
+Each experiment and what it changed is in [docs/experiments.md](docs/experiments.md);
+which workflow stands for which tool, and how the published page is rebuilt,
+in [docs/workflows.md](docs/workflows.md).
 Every term, field and outcome — ours and SPOC's `tce_*` columns — is defined in
 [docs/definitions.md](docs/definitions.md).
 
@@ -74,8 +87,8 @@ Every term, field and outcome — ours and SPOC's `tce_*` columns — is defined
 | `planets.py` | `python -m tesstransit.planets` — every TOI in the sector → search → match against the TOI, with each ephemeris forced on our flux |
 | `site.py` | `python -m tesstransit.site` — the stand-alone results page (per-sector figures, period–depth chart, sky map, experiments, and with `--stitched` the 13-sector stitched samples and with `--long-stitched` the two-year ones, each with its upside-down false-alarm rate) from finished runs of any number of sectors; published at rlemke.github.io/facetwork-maps/space/tess-sector1/ |
 | `_match.py` | the TCE table and the matching rules: `recovered` / `recovered_alias` / `missed` (with a cause) / `unmatched` |
-| `handlers.py` | the Facetwork steps: `TCETable`, `Targets`, `Plan`, `SearchChunk`, `MatchSector`, `BuildSite` — each a thin layer over the modules above |
-| `ffl/tess.ffl` | facets and workflows (`SectorRun`, `SearchSectors`, `BuildResults`, and `StitchedSample`: a stitched sample searched as observed and upside down, one chunk per step so it spreads over the fleet); `ffl/tess_site.ffl` adds `PublishResults` (needs fwh_census_us) |
+| `handlers.py` | the Facetwork steps (`tess.source.*`, `tess.Plan`/`SearchChunk`/`MatchSector`/`BuildSite`, `tess.stitch.*`, `tess.check.Inject`/`Vet`/`Timing`), each a thin layer over the modules above |
+| `ffl/tess.ffl` | the facets and every workflow in the table above; `ffl/tess_site.ffl` adds `PublishResults` and `PublishPage` (needs fwh_census_us) |
 | `domain.py` | the `facetwork.domains` entry point, kept apart so the search runs without Facetwork |
 
 ## The false-alarm rate is measured
@@ -196,6 +209,13 @@ chunks of 3 stars over six hosts, 21.8 h. The median star took 950-1,010 s per p
 and 2,600-3,500 s on the fleet's mix, so a sample of this size is fleet work. The
 search workers cap BLAS at one thread each (`multisector.one_thread`), which
 keeps the hosts from oversubscribing but does not make a star faster.
+
+South A was then searched three more times on the fleet, as hosts' CPUs were
+booked per chunk and chunks were steered to the fast hosts. The signals were
+the same as the CLI run every time, apart from SDE in the first or second
+decimal. The wall clock was 12.3-14.9 h, against 11.3 h on the fastest host
+alone, so for 140 stars one fast host is enough
+([experiments.md](docs/experiments.md#the-stitched-search-on-the-fleet-2026-11-17-to-11-20)).
 
 ## Tests
 

@@ -11,7 +11,14 @@ split is the one the CLIs already had internally:
 3. ``tess.SearchChunk`` -- search one chunk; the fan-out runs these.
 4. ``tess.MatchSector`` -- gather the chunks into ``results.jsonl`` and run the
    CLI's matcher over it (``--reuse``), which writes the run directory.
-5. ``tess.BuildSite`` -- the results page over finished run directories.
+5. ``tess.BuildSite`` -- the results page over finished run directories,
+   including the stitched and two-year stitched sections.
+
+The checks on a finished run are one step each, over the CLI tools that made
+them: ``tess.check.Inject`` (injection-recovery, ``inject.py``),
+``tess.check.Vet`` (shape tests, ``vet.py``) and ``tess.check.Timing``
+(transit timing, ``ttv.py``). Each localizes its inputs, runs the CLI's
+``main`` and uploads what it wrote, so the files are the CLI's own.
 
 The stitched search (``tesstransit.multisector``) has the same shape:
 ``tess.source.StitchTCETable`` (SPOC's multi-sector table), ``tess.stitch.Plan``
@@ -124,11 +131,64 @@ def _push_dir(local: Path, dest: str) -> None:
             _store().write_bytes(_join(dest, f.name), f.read_bytes())
 
 
-def _cfg(prewhiten: bool) -> sr.SearchConfig:
-    # Same rule as the CLIs: pre-whitening is on unless switched off.
-    cfg = sr.SearchConfig(prewhiten_max_period_days=1.5 if prewhiten else 0.0)
+def _cfg(
+    prewhiten: bool, invert: bool = False, overrides: list[str] | None = None
+) -> sr.SearchConfig:
+    # Same rule as the CLIs: pre-whitening is on unless switched off; `invert`
+    # is `pilot --invert` and `overrides` its `--set FIELD=VALUE`.
+    cfg = sr.SearchConfig(
+        prewhiten_max_period_days=1.5 if prewhiten else 0.0, invert_flux=invert
+    )
+    cfg = cfg.override([str(p) for p in overrides or []])
     cfg.validate()
     return cfg
+
+
+def _beating(params: dict[str, Any], fn: Callable[[], Any], what: str) -> Any:
+    """Run ``fn`` (a CLI ``main``) while heartbeating once a minute.
+
+    The CLIs' process pools give no hook to beat from, and a check over a few
+    hundred stars runs longer than a lease, so the CLI runs on a thread and the
+    step beats beside it. A cancelled run stops the beats, not the pool: the
+    pool finishes its current stars and the step then fails as cancelled.
+    """
+    import threading
+
+    ctx = _ctx(params)
+    box: dict[str, Any] = {}
+
+    def target() -> None:
+        try:
+            box["value"] = fn()
+        except BaseException as exc:  # noqa: BLE001 - re-raised on the step's thread
+            box["error"] = exc
+
+    t = threading.Thread(target=target, name=f"tess-{what}", daemon=True)
+    t0 = time.time()
+    t.start()
+    while t.is_alive():
+        t.join(timeout=60)
+        if t.is_alive() and ctx is not None:
+            ctx.raise_if_cancelled()
+            ctx.heartbeat(progress_message=f"{what}: {time.time() - t0:.0f}s")
+    if "error" in box:
+        raise box["error"]
+    return box.get("value")
+
+
+def _manifests(lc_dir: str, sectors: list[int], into: Path) -> Path:
+    """A local light-curve dir holding the named sectors' manifests.
+
+    The CLIs read ``manifest-sNNNN.json`` from their ``--workdir`` and fetch
+    light curves into it, so it must be local scratch even when the manifests
+    live in the object store."""
+    into.mkdir(parents=True, exist_ok=True)
+    for s in sectors:
+        src = _join(lc_dir, _manifest_name(s))
+        if not _exists(src):
+            raise FileNotFoundError(f"no manifest for sector {s} at {src}")
+        (into / _manifest_name(s)).write_text(_read(src))
+    return into
 
 
 def _run_dir(work_dir: str, sector: int, kind: str, label: str) -> str:
@@ -289,7 +349,11 @@ def handle_search_chunk(params: dict[str, Any]) -> dict[str, Any]:
     say = _say(params)
     chunk_path = str(params["chunk_path"])
     chunk = json.loads(_read(chunk_path))
-    cfg = _cfg(bool(params.get("prewhiten", True)))
+    cfg = _cfg(
+        bool(params.get("prewhiten", True)),
+        bool(params.get("invert", False)),
+        list(params.get("set") or []),
+    )
     t0 = time.time()
     with _scratch() as tmp:
         records = search_jobs(
@@ -342,13 +406,21 @@ def handle_match_sector(params: dict[str, Any]) -> dict[str, Any]:
         ]  # fmt: skip
         if not params.get("prewhiten", True):
             argv.append("--no-prewhiten")
+        for pair in params.get("set") or []:
+            argv += ["--set", str(pair)]
         if kind == "planets":
+            if params.get("invert"):
+                # planets.main has no --invert: an upside-down planet search
+                # measures nothing the sample's control does not.
+                raise ValueError("invert applies to kind 'sample' only")
             main = planets.main
         elif kind == "sample":
             main = pilot.main
             argv += ["--n-tce", str(int(params.get("n_tce") or 60)),
                      "--n-quiet", str(int(params.get("n_quiet") or 40)),
                      "--seed", str(int(params.get("seed") or 1))]  # fmt: skip
+            if params.get("invert"):
+                argv.append("--invert")
             for i, r in enumerate(params.get("holdout_of") or []):
                 argv += ["--holdout-of", str(_pull_run(str(r), tmp / f"h{i}"))]
         else:
@@ -677,7 +749,29 @@ def handle_build_site(params: dict[str, Any]) -> dict[str, Any]:
         for a in params["samples"]:
             argv += ["--sample", local(str(a))]
         for v in params.get("variants") or []:
-            argv += ["--variant", str(v)]
+            parts = str(v).split("|")
+            if len(parts) != 5:
+                raise ValueError(
+                    f"variants: {v!r} is not name|detrending|planets-run|dev-run|holdout-run"
+                )
+            for i in (2, 3, 4):
+                parts[i] = str(_pull_run(parts[i], tmp / f"r{len(os.listdir(tmp))}"))
+            argv += ["--variant", "|".join(parts)]
+        for flag, key in (
+            ("--stitched", "stitched"),
+            ("--long-stitched", "long_stitched"),
+        ):
+            for spec in params.get(key) or []:
+                parts = str(spec).split("|")
+                if len(parts) != 5:
+                    raise ValueError(
+                        f"{key}: {spec!r} is not label|settings|run|inverted-run|adopted"
+                    )
+                for i in (2, 3):
+                    parts[i] = str(
+                        _pull_run(parts[i], tmp / f"r{len(os.listdir(tmp))}")
+                    )
+                argv += [flag, "|".join(parts)]
         if params.get("default"):
             argv += ["--default", str(params["default"])]
         rc = site.main(argv)
@@ -687,7 +781,9 @@ def handle_build_site(params: dict[str, Any]) -> dict[str, Any]:
     dest = _join(out_dir, "index.html")
     _write(dest, page)
     say(
-        f"results page: {len(params['planets'])} planet runs, {len(params['samples'])} samples"
+        f"results page: {len(params['planets'])} planet runs, {len(params['samples'])} "
+        f"samples, {len(params.get('stitched') or [])} stitched and "
+        f"{len(params.get('long_stitched') or [])} two-year samples"
     )
     return {"output_dir": out_dir, "page_path": dest, "bytes": len(page.encode())}
 
@@ -707,6 +803,157 @@ def _pull_lc(lc_dir: str, tmp: Path) -> Path:
 
 
 # ---------------------------------------------------------------------------
+# checks on finished runs: injection-recovery, shape tests, transit timing
+# ---------------------------------------------------------------------------
+
+
+def _quiet_main(main: Callable[[list[str]], int], argv: list[str], what: str) -> None:
+    with contextlib.redirect_stdout(io.StringIO()):
+        rc = main(argv)
+    if rc:
+        raise RuntimeError(f"{what} exited {rc}")
+
+
+def handle_inject(params: dict[str, Any]) -> dict[str, Any]:
+    """``inject.py`` over one sample run: synthetic transits in its no-TCE stars.
+
+    ``sample`` is the run in MatchSector's ``site_arg`` form
+    (``SECTOR=LABEL=RUN_DIR``), so a sector run's output feeds it directly."""
+    from . import inject
+
+    say = _say(params)
+    sector_s, _, rest = str(params["sample"]).partition("=")
+    _, _, run = rest.partition("=")
+    if not run:
+        raise ValueError(
+            f"sample must be SECTOR=LABEL=RUN_DIR, got {params['sample']!r}"
+        )
+    sector = int(sector_s)
+    run_dir = _join(str(params["out_dir"]), Path(run.rstrip("/")).name + "-inject")
+    tce_path = _join(str(params["tce_dir"]), f"s{sector:04d}_tcestats.csv")
+    with _scratch() as tmp:
+        lcdir = _manifests(str(params["lc_dir"]), [sector], tmp / "lc")
+        out = tmp / "out"
+        argv = [
+            "--sector", str(sector),
+            "--tce-csv", str(_pull(tce_path, tmp)),
+            "--workdir", str(lcdir),
+            "--sample-run", str(_pull_run(run, tmp / "sample")),
+            "--out", str(out),
+            "--per-star", str(int(params.get("per_star") or 6)),
+            "--seed", str(int(params.get("seed") or 1)),
+            "--workers", str(max(1, int(params.get("workers") or 8))),
+        ]  # fmt: skip
+        if not params.get("prewhiten", True):
+            argv.append("--no-prewhiten")
+        for pair in params.get("set") or []:
+            argv += ["--set", str(pair)]
+        if params.get("replay"):
+            (tmp / "replay").mkdir()
+            argv += ["--replay", str(_pull(str(params["replay"]), tmp / "replay"))]
+        _beating(params, lambda: _quiet_main(inject.main, argv, "inject"), "inject")
+        summary = json.loads((out / "summary.json").read_text())
+        _push_dir(out, run_dir)
+    found = summary["recovered"] + summary["recovered_alias"]
+    failed = len(summary["failed"])
+    say(f"sector {sector}: {found} of {summary['injections']} injected transits found "
+        f"on {summary['stars']} no-TCE stars, {failed} failed")  # fmt: skip
+    if failed:
+        say(f"sector {sector}: {failed} injection(s) failed", level="warning")
+    return {
+        "run_dir": run_dir,
+        "summary_path": _join(run_dir, "summary.json"),
+        "injections": summary["injections"],
+        "found": found,
+        "failed": failed,
+    }
+
+
+def handle_vet(params: dict[str, Any]) -> dict[str, Any]:
+    """``vet.py`` over planet runs (``SECTOR=RUN_DIR``, MatchSector's ``site_arg``)."""
+    import csv
+
+    from . import vet
+
+    say = _say(params)
+    specs = [str(p).partition("=") for p in params["planets"]]
+    if not specs or any(not run for _, _, run in specs):
+        raise ValueError("planets must be a non-empty list of SECTOR=RUN_DIR")
+    out_dir = str(params["out_dir"])
+    with _scratch() as tmp:
+        lcdir = _manifests(str(params["lc_dir"]), sorted({int(s) for s, _, _ in specs}),
+                           tmp / "lc")  # fmt: skip
+        out = tmp / "out"
+        argv = ["--runs", str(tmp), "--workdir", str(lcdir), "--out", str(out),
+                "--workers", str(max(1, int(params.get("workers") or 8)))]  # fmt: skip
+        for i, (s, _, run) in enumerate(specs):
+            argv += ["--planets", f"{int(s)}={_pull_run(run, tmp / f'p{i}')}"]
+        _beating(params, lambda: _quiet_main(vet.main, argv, "vet"), "vet")
+        rows = list(csv.DictReader((out / "vet.csv").open()))
+        _push_dir(out, out_dir)
+    failed = sum(r["ok"] != "True" for r in rows)
+    flagged = sum(bool(r.get("fails")) for r in rows if r["ok"] == "True")
+    say(f"{len(rows)} signals vetted over {len(specs)} runs: {flagged} binary-like, "
+        f"{failed} failed")  # fmt: skip
+    return {
+        "out_dir": out_dir,
+        "csv_path": _join(out_dir, "vet.csv"),
+        "signals": len(rows),
+        "flagged": flagged,
+        "failed": failed,
+    }
+
+
+def handle_timing(params: dict[str, Any]) -> dict[str, Any]:
+    """``ttv.py``: each transit timed on the stitched light curve, O - C.
+
+    Times the named TOIs (``tois``, from ``toi_path``) and/or every signal
+    with at least ``min_transits`` transits in a stitched run (``from_run``)."""
+    from . import ttv
+
+    say = _say(params)
+    secs = _sectors(params)
+    tois = [str(t) for t in params.get("tois") or []]
+    from_run = str(params.get("from_run") or "")
+    if not tois and not from_run:
+        raise ValueError("give tois (with toi_path), from_run, or both")
+    if tois and not params.get("toi_path"):
+        raise ValueError("tois need toi_path")
+    out_dir = str(params["out_dir"])
+    with _scratch() as tmp:
+        lcdir = _manifests(str(params["lc_dir"]), secs, tmp / "lc")
+        out = tmp / "out"
+        argv = [
+            "--sectors", ",".join(str(s) for s in secs),
+            "--workdir", str(lcdir), "--out", str(out),
+            "--min-transits", str(int(params.get("min_transits") or 4)),
+            "--bin-minutes", str(float(params.get("bin_minutes") or 10.0)),
+            "--workers", str(max(1, int(params.get("workers") or 8))),
+        ]  # fmt: skip
+        if tois:
+            argv += ["--toi-csv", str(_pull(str(params["toi_path"]), tmp))]
+            for t in tois:
+                argv += ["--toi", t]
+        if from_run:
+            argv += ["--from-run", str(_pull_run(from_run, tmp / "run"))]
+        _beating(params, lambda: _quiet_main(ttv.main, argv, "ttv"), "ttv")
+        rows = [
+            json.loads(ln) for ln in (out / "ttv.jsonl").read_text().splitlines() if ln
+        ]
+        _push_dir(out, out_dir)
+    failed = sum(not r["ok"] for r in rows)
+    timed = sum(1 for r in rows if r["ok"] and "chi2_dof" in r)
+    say(f"{len(rows)} signals: {timed} timed (4+ transits), {failed} failed")
+    return {
+        "out_dir": out_dir,
+        "jsonl_path": _join(out_dir, "ttv.jsonl"),
+        "signals": len(rows),
+        "timed": timed,
+        "failed": failed,
+    }
+
+
+# ---------------------------------------------------------------------------
 # registration
 # ---------------------------------------------------------------------------
 
@@ -721,6 +968,9 @@ _DISPATCH: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
     "tess.stitch.Plan": handle_stitch_plan,
     "tess.stitch.SearchChunk": handle_stitch_search_chunk,
     "tess.stitch.Match": handle_stitch_match,
+    "tess.check.Inject": handle_inject,
+    "tess.check.Vet": handle_vet,
+    "tess.check.Timing": handle_timing,
 }
 
 

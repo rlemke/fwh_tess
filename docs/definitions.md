@@ -388,3 +388,49 @@ Treat both as "not available", never as a measurement.
 
 Kepler columns with no TESS counterpart here: `tce_chisq1`/`tce_dof1`, the
 rolling-band columns, the flux-weighted centroid columns.
+
+## 5. The results page — what each table's columns mean
+
+The page (`python -m tesstransit.site`, or `tess.workflows.BuildPage`) shows
+these definitions under each table and as each column header's tooltip. The
+wording is here so it can be cited; the template is
+`src/tesstransit/site_template.html`.
+
+### 5.1 Results by sector
+
+Each sector searched independently with the same settings. Sector 1 was used
+to tune the search; sectors 2 onward were run afterwards, unchanged. A TOI
+counts once per sector it was observed in.
+
+| Column | Meaning |
+|---|---|
+| Sector | The TESS sector (one ~27-day pointing). Each row is that sector searched on its own. |
+| Planets found | Of the "Planets SPOC detected", how many this search found again: a signal on the same star at the TOI's period (within 0.5%, or at 2×, ½×, 3× or ⅓× of it) with transits at the same times. An alias counts as found. |
+| Planets SPOC detected | TOIs listing this sector whose disposition is a planet or candidate (CP, KP or PC), on a star with a 2-minute light curve in the sector, for which SPOC made a TCE in this same sector (period within 0.5%, alias-aware). These are the planets the sector's own data was shown to contain. |
+| Confirmed found | Of "Confirmed", how many were found again, by the same rule as "Planets found". |
+| Confirmed | The subset of "Planets SPOC detected" that are confirmed (CP) or known (KP) planets; candidates (PC) are left out. |
+| No-TCE candidates found | Of "No-TCE candidates in data", how many this search found. |
+| No-TCE candidates in data | Planet or candidate TOIs listing this sector for which SPOC made no TCE in the sector, but whose known ephemeris, measured on this search's own detrended flux, gives at least 2 transits with data and a red-noise SNR at or above the search threshold. TOIs too weak in one sector, with too few transits, or with a period outside the search range are not counted. |
+| TCEs found | In the TCE sample, how many of SPOC's TCEs on the sampled stars this search found again (an alias counts). |
+| TCEs in range | The TCEs on the sampled TCE stars whose period is inside the search range (two transits must fit in one sector). TCEs on stars that were not sampled are not counted. |
+| No-TCE stars with a signal | Sampled stars with no TCE in the sector on which this search reported at least one signal. They are unvetted; the upside-down control shows that, as a group, they occur at the rate false alarms alone produce. |
+| No-TCE stars | Stars drawn at random (seeded) from those the sector observed with no TCE, over every sample shown for the sector (sector 1 has a development and a hold-out sample). |
+
+### 5.2 Detrending experiments (sector 1)
+
+Each version of the search scored on sector 1's three samples: the planet
+sample, the development sample and the hold-out sample.
+
+| Column | Meaning |
+|---|---|
+| Variant | The version of the search: each row is one detrending, everything else as it was then. The current default is marked. |
+| Detrending | How stellar variability and spacecraft trends were removed before the box search. |
+| Planets found | Of "Planets SPOC detected", how many this variant found again in sector 1 (same rule as in the table above). |
+| Planets SPOC detected | Sector 1's planet and candidate TOIs (CP, KP, PC) that SPOC made a sector-1 TCE for, on stars with a 2-minute light curve. |
+| Development TCEs found | In the development sample (60 TCE stars spread over SPOC's SNR range and 40 random no-TCE stars, seed 1), how many TCEs were found again (an alias counts). The search was tuned on this sample. |
+| Development TCEs | The development sample's TCEs whose period is inside the search range. |
+| Development stars with no TCE but a signal | Of the development sample's 40 no-TCE stars, how many got a signal from this variant. |
+| Hold-out TCEs found | The same as "Development TCEs found", on the hold-out sample: drawn with seed 2 and sharing no star with the development sample, so a variant tuned on development is scored on stars it never saw. |
+| Hold-out TCEs | The hold-out sample's TCEs whose period is inside the search range. |
+| Hold-out stars with no TCE but a signal | Of the hold-out sample's 40 no-TCE stars, how many got a signal. |
+| Seconds per star | The median time to fetch, detrend and search one star in the development sample, for one search process (the run used 8 or 12 in parallel). Comparable between variants, not a sector's wall clock. |
