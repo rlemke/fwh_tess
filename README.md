@@ -13,13 +13,18 @@ alone. Signals with no TCE are **unvetted** and are never reported as planets.
 
 ## Status
 
-Sectors 1–55 searched (the first four years). Of the planets and candidates
+Sectors 1–108 searched (every sector released by 2026-11-23); new sectors
+are searched as MAST releases them (`fw svc tess-update`). Of the planets and candidates
 SPOC detected in the same sector, **682 of 707 (96.5%)** are found again in
 sectors 1–13, **670 of 696 (96.3%)** in sectors 14–26, **1,341 of 1,383
-(97.0%)** in sectors 27–39 and **1,923 of 1,957 (98.3%)** in sectors 40–55;
-the last three were searched with nothing tuned on them. Two years stitched together (SDE 18) find **22 of 22** planets and
+(97.0%)** in sectors 27–39, **1,923 of 1,957 (98.3%)** in sectors 40–55
+and **2,734 of 2,797 (97.7%)** in sectors 56–108; all but the first year
+were searched with nothing tuned on them. Two years stitched together (SDE 18) find **22 of 22** planets and
 candidates in range over three samples, with an upside-down false-alarm rate
-of 4.6%. The results page shows all 55:
+of 4.6%. Signals found here that no catalogue
+claims are listed, with the tests that sort them from the expected false
+alarms, in [docs/unclaimed.md](docs/unclaimed.md); none is claimed as a
+planet. The results page shows sectors 1–55:
 <https://rlemke.github.io/facetwork-maps/space/tess-sector1/>.
 
 A Facetwork domain (`tess`): every command-line tool has an FFL workflow that
@@ -84,6 +89,7 @@ Every term, field and outcome — ours and SPOC's `tce_*` columns — is defined
 | `multisector.py` | `python -m tesstransit.multisector` — each sector flattened, then stitched and searched as one light curve (1 d to half the baseline), scored against SPOC's multi-sector TCEs |
 | `vet.py` | `python -m tesstransit.vet` — odd/even, secondary-eclipse and V-shape tests at a signal's ephemeris; thresholds measured on recovered CP/KP planets vs EB TOIs |
 | `ttv.py` | `python -m tesstransit.ttv` — each transit timed on the stitched light curve, O − C against the best fixed period |
+| `unclaimed.py` | `python -m tesstransit.unclaimed` — every signal in the runs checked against every TCE (single- and multi-sector), TOI, community TOI and confirmed planet; the unclaimed ones sorted by their own upside-down search and by repeats in independent sectors, shared-period pile-ups set aside; writes `docs/unclaimed.md` + `docs/data/unclaimed.csv` |
 | `planets.py` | `python -m tesstransit.planets` — every TOI in the sector → search → match against the TOI, with each ephemeris forced on our flux |
 | `site.py` | `python -m tesstransit.site` — the stand-alone results page (per-sector figures, period–depth chart, sky map, experiments, and with `--stitched` the 13-sector stitched samples and with `--long-stitched` the two-year ones, each with its upside-down false-alarm rate) from finished runs of any number of sectors; published at rlemke.github.io/facetwork-maps/space/tess-sector1/ |
 | `_match.py` | the TCE table and the matching rules: `recovered` / `recovered_alias` / `missed` (with a cause) / `unmatched` |

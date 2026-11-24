@@ -107,3 +107,31 @@ The run appears in the dashboard like any other. What the fleet does with the
 stitched chunks (CPU booking, fast-host placement, the reserve a desktop host
 keeps) and how three re-runs of one sample went is in
 [experiments.md](experiments.md#the-stitched-search-on-the-fleet-2026-11-17-to-11-20).
+
+## Keeping up with new sectors
+
+`fw svc tess-update` (in the facetwork repo) checks MAST every day and, for each
+sector released since its last run, submits `tess.workflows.SearchSectors` and
+`tess.workflows.FalseAlarms` for it, with the defaults the CLI runs use. A
+sector counts as released only when its SPOC single-sector TCE table is listed
+AND its 2-minute light curves are in the bucket. Results go to
+`s3://afl-cache/cache/tess/sectors`, one run directory per sector and kind.
+
+- MAST gives no release calendar. Measured in 2026, a new sector arrived every
+  3-6 weeks (s104 07-13, s105 08-17, s106 09-10, s107 10-01, s108 11-12, dates
+  the first file was written).
+- **The TOI catalogue lags the data by months.** On 2026-11-23 no TOI listed a
+  sector after 96 and few listed one after 70, so a new sector's planet sample
+  is usually empty and only the TCE/no-TCE sample says anything. Re-run the
+  planet sample of a sector later, against a newer catalogue, with
+  `fw svc tess-update --sectors N`.
+- `--check` alarms when no new sector has arrived for 70 days, and MAST
+  reprocessing an old sector is reported, never re-run unattended.
+
+⚠️ An empty planet sample first ran on 2026-11-23 (sector 108) and failed:
+`SearchEach` returned `results: Json` only through `+=` in its `foreach`, so with
+zero chunks nothing set it, and `MatchSector`'s `searched.results` was "not found".
+The fan-out returns are now array-typed (`[String]`, `[Long]`), which the runtime
+sets to `[]` for a zero-iteration `foreach` (that runtime step also had a bug for
+facets called as steps, fixed in facetwork), and `planets.py` writes `tois.csv`
+with a fixed header instead of the first row's keys.
