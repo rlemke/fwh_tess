@@ -1557,7 +1557,7 @@ TCE/no-TCE sample, and that sample upside down. Run on one host, 12 workers,
   signals on no-TCE stars remain false alarms as a group. The rate rises to
   24% in sectors 97-108, as it did in 52-55; there the cause was which stars
   were targeted. Not checked here.
-- ⚠️ **The TOI catalogue lags the data.** No TOI lists a sector after 96, and
+- ⚠️ **The TOI catalogue lags the data.** No TOI lists a sector after 97, and
   few list one after 70, so the planet samples shrink from ~2,000 TOIs per 14
   sectors to 26 in 97-108. Those sectors are measured almost only by the
   TCE/no-TCE sample until the catalogue catches up.

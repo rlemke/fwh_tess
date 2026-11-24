@@ -173,7 +173,7 @@
 
   <section class="tx-card" id="by-sector">
     <h2>Results by sector</h2>
-    <p class="note">Each sector searched independently with the same settings. Sector 1 was used to tune the search; sectors 2 onward were run afterwards, unchanged.</p>
+    <p class="note">Each sector searched independently with the same settings. Sector 1 was used to tune the search; sectors 2 onward were run afterwards, unchanged. A sector shows 0 of 0 planets when the TOI catalogue does not yet list any TOI as observed in it (on 2026-11-23, none after sector 97); those rows fill in when the search is re-scored against a later catalogue.</p>
     <div class="tx-wrap">
       <table data-source="by_sector" data-row-key="sector">
         <thead>
@@ -453,6 +453,11 @@
         </table>
       </div>
     </details>
+  </section>
+
+  <section class="tx-card" id="unclaimed">
+    <h2>Signals no catalogue claims</h2>
+    <p class="note">Every signal the search reported, in all sectors and the stitched samples, was checked against SPOC's TCEs (every single- and multi-sector table), the TOI catalogue, the community TOIs and the confirmed planets. A signal is unclaimed when none of them lists that star at that period or a simple multiple or fraction of it. On 2026-11-23 that left <b>4,274</b> candidate signals out of 25,693. Each star was then searched again upside down, and each period checked for a repeat in an independent sector: <b>8</b> repeat in two or more sectors with nothing found upside down, 1,282 were found once with nothing upside down, and the rest look like stellar variability, broken light curves, or a period many unrelated stars share. None of them is claimed as a planet; most single-sector signals on stars without a SPOC detection are false alarms (see the upside-down rates above). The full list, with the rules and every row, is <a href="https://github.com/rlemke/fwh_tess/blob/main/docs/unclaimed.md">docs/unclaimed.md</a> in the search's repository.</p>
   </section>
 
   <section class="tx-card" id="terms">

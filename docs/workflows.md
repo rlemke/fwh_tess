@@ -121,7 +121,7 @@ AND its 2-minute light curves are in the bucket. Results go to
   3-6 weeks (s104 07-13, s105 08-17, s106 09-10, s107 10-01, s108 11-12, dates
   the first file was written).
 - **The TOI catalogue lags the data by months.** On 2026-11-23 no TOI listed a
-  sector after 96 and few listed one after 70, so a new sector's planet sample
+  sector after 97 and few listed one after 70, so a new sector's planet sample
   is usually empty and only the TCE/no-TCE sample says anything. Re-run the
   planet sample of a sector later, against a newer catalogue, with
   `fw svc tess-update --sectors N`.
