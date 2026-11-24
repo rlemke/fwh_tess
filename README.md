@@ -24,7 +24,7 @@ candidates in range over three samples, with an upside-down false-alarm rate
 of 4.6%. Signals found here that no catalogue
 claims are listed, with the tests that sort them from the expected false
 alarms, in [docs/unclaimed.md](docs/unclaimed.md); none is claimed as a
-planet. The results page shows sectors 1–55:
+planet. The results page shows sectors 1–108:
 <https://rlemke.github.io/facetwork-maps/space/tess-sector1/>.
 
 A Facetwork domain (`tess`): every command-line tool has an FFL workflow that

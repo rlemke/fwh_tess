@@ -4,8 +4,10 @@ Every signal in the given runs is checked against everything published about
 its star: every SPOC TCE (single-sector AND multi-sector tables), every TOI
 (any disposition, false positives included), every community TOI (CTOI) and
 every confirmed planet in the NASA Exoplanet Archive. A signal is CLAIMED when
-any of them lists the same star at the same period or an alias of it (x1, x2,
-x1/2, x3, x1/3, within 0.5%: the matcher's own tolerance). What is left is
+any of them lists the same star at the same period or a simple multiple or
+fraction of it (CLAIM_ALIASES), within a tolerance the signal's own transits set
+(claim_tol), widened on stars with a planet flagged for timing variations
+(TTV_TOL). What is left is
 UNCLAIMED: found here and, as far as these catalogues show, nowhere else.
 
 ⚠️ Unclaimed is not a discovery. Measured on the same stars searched upside
@@ -58,12 +60,18 @@ CLAIM_ALIASES: tuple[float, ...] = tuple(
     )
 )
 REL_TOL = 0.005
+# A planet whose transit times vary (the archive's ttv_flag) has no single
+# period to match: catalogues disagree on it, and so does one sector. TOI-1408 c
+# is 2.2222 d in the TOI catalogue and 2.1664 d in the confirmed table, 2.6%
+# apart. On a star with such a planet a claim may be this far off.
+TTV_TOL = 0.03
 
 
 @dataclass
 class Claim:
     source: str  # "TCE s0045", "TCE s0001-s0096", "TOI 123.01 (PC)", "CTOI ...", "planet ..."
     period_days: float
+    ttv: bool = False  # a confirmed planet the archive flags for timing variations
 
 
 @dataclass
@@ -156,7 +164,8 @@ def read_planet_claims(path: Path) -> dict[int, list[Claim]]:
         tic = (row.get("tic_id") or "").replace("TIC", "").strip()
         per = _num(row.get("pl_orbper"))
         if tic.isdigit() and per is not None:
-            out[int(tic)].append(Claim(f"planet {row['pl_name']}", per))
+            ttv = (row.get("ttv_flag") or "").strip() == "1"
+            out[int(tic)].append(Claim(f"planet {row['pl_name']}", per, ttv))
     return out
 
 
@@ -267,6 +276,7 @@ def collect(
     """Every signal of every run, claimed or not, plus each run's star counts."""
     found: list[Found] = []
     counts: dict[str, dict[str, int]] = {}
+    ttv_stars = {tic for tic, cs in claims.items() if any(c.ttv for c in cs)}
     jobs = (
         [("sample", s, o, i) for s, o, i in samples]
         + [("planets", s, o, None) for s, o in planets]
@@ -312,6 +322,8 @@ def collect(
                     n_transits=s["n_transits"],
                 )
                 tol = claim_tol(f)
+                if tic in ttv_stars:
+                    tol = max(tol, TTV_TOL)
                 f.claimed_by = sorted(
                     {
                         c.source
@@ -545,7 +557,12 @@ def write_md(data: dict[str, Any], path: Path, csv_name: str, max_b: int = 100) 
         '## What "no catalogue claims it" means',
         "",
         "A signal is **claimed** when any of these lists the same star at the same",
-        "period or an alias of it (x1, x2, x1/2, x3, x1/3, within 0.5%):",
+        "period or a simple multiple or fraction of it (x1 to x6, x1/2 to x1/6, x3/2,",
+        "x2/3, x5/2, x2/5). The match allows 0.5%, or more when the signal's own",
+        "transits fix its period less precisely (about one duration over the span",
+        "of its transits), and 3% on a star with a confirmed planet the archive",
+        "flags for transit-timing variations, whose period no catalogue pins down",
+        "(TOI-1408 c: 2.2222 d as a TOI, 2.1664 d confirmed):",
         "",
         f"- every SPOC TCE: {len(data['tce_tables'])} DV tables, single-sector and",
         f"  multi-sector ({cat['tce']:,} TCEs);",
@@ -705,8 +722,10 @@ def main(argv: list[str] | None = None) -> int:
             a.workers,
         )
     cands = group(found, claims)
-    write_csv(cands, a.csv)
+    # after mark_pileups: it moves candidates to tier S, and the CSV must agree
+    # with the report
     pileups = mark_pileups(cands)
+    write_csv(cands, a.csv)
     tiers = {t: sum(1 for c in cands if c.tier == t) for t in "ABSCDX"}
     print(
         f"{len(found)} signals, {sum(1 for f in found if not f.claimed_by)} unclaimed -> "

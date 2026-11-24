@@ -1577,7 +1577,7 @@ lists every signal in the published runs (all 108 sectors, the 13-sector and
 two-year stitches) that no catalogue claims: no SPOC TCE (all 113 single- and
 multi-sector tables), TOI (false positives included), community TOI or
 confirmed planet on that star at that period or a harmonic of it. 25,693
-signals, 5,412 unclaimed, 4,274 candidates (one star, one period).
+signals, 5,394 unclaimed, 4,259 candidates (one star, one period).
 
 Measured on the sample runs' no-TCE stars, 709 of 4,970 star-searches gave a
 signal the right way up and 773 upside down: as a group these are noise and
@@ -1588,14 +1588,14 @@ and whether the period came back in independent sectors.
 
 | tier | rule | candidates |
 |---|---|---|
-| A | nothing upside down; found in 2+ independent sectors | 8 |
-| B | nothing upside down; found once | 1,282 |
-| S | as A or B, at a period many unrelated stars share | 56 |
-| C | upside down finds another period (a variable star) | 1,847 |
+| A | nothing upside down; found in 2+ independent sectors | 7 |
+| B | nothing upside down; found once | 1,271 |
+| S | as A or B, at a period many unrelated stars share | 55 |
+| C | upside down finds another period (a variable star) | 1,845 |
 | D | upside down finds the same period (variability) | 810 |
 | X | depth of 100% or more (a broken light curve) | 271 |
 
-Three things the first version got wrong, each found by reading its output:
+Five things earlier versions got wrong, each found by reading the output:
 
 - **Claimed too narrowly.** The matcher's aliases stop at x3 and its
   tolerance is 0.5%, so a SPOC TCE at 0.27864 d left our 1.11456 d (x4)
@@ -1614,3 +1614,37 @@ Three things the first version got wrong, each found by reading its output:
   cause of the 1.00 d pile-up is not yet investigated, nor is a looser group
   of deep 0.89-0.92 d signals spread over three bins, or why tier X (270 of
   271 in sample runs) concentrates in sectors 91-105.
+- **The CSV disagreed with the report.** The CSV was written before pile-ups
+  were marked, so TIC 177308364 (25.80 d, two dips, at the 26 d grid edge)
+  read tier A in `data/unclaimed.csv` and tier S in the report. Fixed; a test
+  checks the CSV's tier counts against the report's.
+- **Planets with timing variations have no single period.** TOI-1408 c is
+  2.2222 d in the TOI catalogue and 2.1664 d in the confirmed table, 2.6%
+  apart. Ours, 2.1777 d in sectors 25 and 76, missed the confirmed period by
+  0.522% against a tolerance of 0.522%, and so read as an unclaimed tier A.
+  At the TOI ephemeris the transit fit finds nothing in those sectors
+  (-48 ppm and +29 ppm), and stitching sectors 73-79 puts the next signal
+  after planet b at 2.1946 d (SDE 11.3, below the cut), between the two
+  catalogue periods: it is planet c, displaced by its timing variations. On a
+  star with a confirmed planet the archive flags (`ttv_flag`, 498 planets),
+  claims now match within 3%. 18 signals became claimed (5,412 -> 5,394).
+
+### Following up tier A
+
+The seven tier A candidates are six stars (TIC 232641326 has two rows, one per
+year), each already with a TOI. None of them is a new planet on a star nobody
+looked at.
+
+| TIC | our period (d) | depth (ppm) | sectors | known on the star | reading |
+|---|---|---|---|---|---|
+| 219857012 | 10.307 | 279 | 78, 79 | TOI-1742 b, 21.269 d, 350 ppm, 6 h | One of the two dips in sector 78 and one of three in 79 ARE planet b (predicted 3448.14 and 3469.41 BTJD). The others (3437.83, 3459.09, 3479.75) fall roughly halfway between b's transits, same 6 h duration and similar depth. Stitching 13 sectors (73-86, 377 d) finds b at 21.2689 d with 13 transits and nothing else (next peak 119 d, SDE 9.6; upside down nothing): the extra dips do not recur over the year. Not a second planet; something in sectors 78-79, not identified. |
+| 232641326 (2 rows) | 0.927 / 0.914 | 750-900 | 25-26; 48-52 | TOI 1874.01, 17.87 d, 11,200 ppm; a CTOI | Found independently in years 2 and 4, but at periods 1.4% apart, more than a planet's period changes: most likely stellar. |
+| 219776325 | 0.4825 | 241 | 21, 81 | TOI 1610.01, 2.53 d | Shallow and short, repeated five years apart, nothing upside down. Not followed up. |
+| 459970307 | 14.097 | 4,639 | 40, 41 | TOI-1154 b, 21.75 d, 659 ppm | Two 1 h dips 7x deeper than the planet's: likely systematics. Not followed up. |
+| 155114483 | 0.8007 | 370 | 17, 57 | TOI 1370.01, flagged an eclipsing binary | On a known binary. |
+| 309257814 | 0.7013 | 2,157 | 37, 62 | TOI 171.01 + 171.02 (eclipsing binary) | On a known binary. |
+
+So the follow-up removed two of the eight (TOI-1408 c is known; TIC 177308364
+is a grid-edge artefact) and explained a third (TOI-1742's extra dips do not
+repeat). What remains unexplained is small: a 0.48 d, 241 ppm signal on
+TOI-1610's star, found five years apart.

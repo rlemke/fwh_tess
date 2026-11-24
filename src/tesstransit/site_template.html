@@ -457,7 +457,24 @@
 
   <section class="tx-card" id="unclaimed">
     <h2>Signals no catalogue claims</h2>
-    <p class="note">Every signal the search reported, in all sectors and the stitched samples, was checked against SPOC's TCEs (every single- and multi-sector table), the TOI catalogue, the community TOIs and the confirmed planets. A signal is unclaimed when none of them lists that star at that period or a simple multiple or fraction of it. On 2026-11-23 that left <b>4,274</b> candidate signals out of 25,693. Each star was then searched again upside down, and each period checked for a repeat in an independent sector: <b>8</b> repeat in two or more sectors with nothing found upside down, 1,282 were found once with nothing upside down, and the rest look like stellar variability, broken light curves, or a period many unrelated stars share. None of them is claimed as a planet; most single-sector signals on stars without a SPOC detection are false alarms (see the upside-down rates above). The full list, with the rules and every row, is <a href="https://github.com/rlemke/fwh_tess/blob/main/docs/unclaimed.md">docs/unclaimed.md</a> in the search's repository.</p>
+    <p class="note">Every signal the search reported, in all sectors and the stitched samples, was checked against SPOC's TCEs (every single- and multi-sector table), the TOI catalogue, the community TOIs and the confirmed planets. A signal is unclaimed when none of them lists that star at that period or a simple multiple or fraction of it. On 2026-11-23 that left <b>4,259</b> candidate signals out of 25,693. Each star was then searched again upside down, and each period checked for a repeat in an independent sector: <b>7</b> repeat with nothing found upside down, 1,271 were found once with nothing upside down, and the rest look like stellar variability, broken light curves, or a period many unrelated stars share. Most single-sector signals on stars without a SPOC detection are false alarms (see the upside-down rates above), so none of them is claimed as a planet. The full list, with the rules and every row, is <a href="https://github.com/rlemke/fwh_tess/blob/main/docs/unclaimed.md">docs/unclaimed.md</a> in the search's repository.</p>
+    <p class="note">The seven that repeat were followed up one by one. They are six stars, and every one already has a TOI for a different signal, so none is a planet on a star nobody had looked at:</p>
+    <div class="tx-wrap">
+      <table>
+        <thead>
+          <tr><th>TIC</th><th class="n">Our period (days)</th><th class="n">Depth (ppm)</th><th>Sectors</th><th>Already known on the star</th><th>What the follow-up shows</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>219776325</td><td class="n">0.4825</td><td class="n">241</td><td>21, 81</td><td>TOI 1610.01 (candidate), 2.53 days</td><td>Shallow and short, found again five years later, nothing upside down. Not explained; the one most worth a closer look.</td></tr>
+          <tr><td>219857012</td><td class="n">10.307</td><td class="n">279</td><td>78, 79</td><td>TOI-1742 b, 21.27 days, 350 ppm</td><td>One dip in each sector is planet b itself; the others fall about halfway between its transits. Thirteen sectors stitched together find b and nothing else, so the extra dips do not recur: not a second planet.</td></tr>
+          <tr><td>232641326</td><td class="n">0.927 and 0.914</td><td class="n">750–900</td><td>25–26, 48–52</td><td>TOI 1874.01, 17.87 days; a community TOI</td><td>Found in two separate years, but at periods 1.4% apart, more than an orbit changes: most likely the star itself.</td></tr>
+          <tr><td>459970307</td><td class="n">14.097</td><td class="n">4,639</td><td>40, 41</td><td>TOI-1154 b, 21.75 days, 659 ppm</td><td>Two one-hour dips seven times deeper than the planet's: most likely instrumental.</td></tr>
+          <tr><td>155114483</td><td class="n">0.8007</td><td class="n">370</td><td>17, 57</td><td>TOI 1370.01, an eclipsing binary</td><td>On a known binary star.</td></tr>
+          <tr><td>309257814</td><td class="n">0.7013</td><td class="n">2,157</td><td>37, 62</td><td>TOI 171.01, and 171.02 an eclipsing binary</td><td>On a known binary system.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Two earlier entries turned out to be known or artificial. TOI-1408's 2.18-day signal is planet c, whose transit times shift so much that catalogues list it at 2.17 and 2.22 days; matching now allows for planets flagged with timing variations. A 25.8-day signal on TIC 177308364 sat at the edge of the search's period range, where many unrelated stars give signals.</p>
   </section>
 
   <section class="tx-card" id="terms">
