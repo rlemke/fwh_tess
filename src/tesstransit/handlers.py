@@ -529,10 +529,15 @@ def handle_stitch_plan(params: dict[str, Any]) -> dict[str, Any]:
                 for i, r in enumerate(params.get("holdout_of") or [])]  # fmt: skip
         paired = [_pull_run(str(r), tmp / f"p{i}")
                   for i, r in enumerate(params.get("sample_of") or [])]  # fmt: skip
+        given = frozenset(int(t) for t in params.get("stars") or [])
+        if given and (held or paired):
+            raise ValueError(
+                "stars is an explicit sample: no holdout_of or sample_of with it"
+            )
         tce_stars, quiet, unobserved, dropped = ms.choose(
             stars, tces, int(params.get("n_tce") or 150),
             int(params.get("n_quiet") or 150), int(params.get("seed") or 1),
-            stars_of(held), stars_of(paired) if paired else None,
+            stars_of(held), given or (stars_of(paired) if paired else None),
         )  # fmt: skip
     observed = ms.base_config(sectors=secs).override(list(params.get("set") or []))
     inverted = replace(observed, invert_flux=True)
@@ -563,6 +568,7 @@ def handle_stitch_plan(params: dict[str, Any]) -> dict[str, Any]:
             "holdout_of": [str(r) for r in params.get("holdout_of") or []],
             "sample_of": [str(r) for r in params.get("sample_of") or []],
             "sample_of_not_eligible": dropped,
+            "stars_given": len(given),
             "tce_stars_not_eligible": len(unobserved),
         },
     }

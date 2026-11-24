@@ -323,3 +323,17 @@ def test_sector_with_no_toi_completes_empty(inputs):
     assert out["stars"] == 0
     summary = json.loads(Path(out["run_dir"], "summary.json").read_text())
     assert summary["sector"] == 1
+
+
+def test_stitched_sample_takes_an_explicit_star_list(stitch_inputs):
+    inputs, handlers = stitch_inputs
+    given = sorted(STARS)[:2] + [999999999]  # the last one has no 2-min data
+    out, _ran = run(
+        "tess.workflows.StitchedSample", {**inputs, "stars": given}, handlers
+    )
+    plan = json.loads(
+        (Path(out["run_dir"]).parent / "fleet1" / "plan.json").read_text()
+    )
+    assert sorted(plan["tce_stars"] + plan["quiet"]) == sorted(STARS)[:2]
+    assert plan["meta"]["stars_given"] == 3
+    assert plan["meta"]["sample_of_not_eligible"] == [999999999]

@@ -141,7 +141,10 @@ namespace tess.stitch {
     /** The stitched search's sample: stars with 2-minute data in at least
       * `min_sectors` of `sectors`, `n_tce` with a SPOC TCE and `n_quiet`
       * without, drawn with `seed` and sharing no star with `holdout_of`;
-      * or, with `sample_of`, those runs' stars again (a paired run).
+      * or, with `sample_of`, those runs' stars again (a paired run); or,
+      * with `stars`, exactly those TIC ids (an explicit sample, e.g. nearby
+      * stars with no known planet). A given star that is not eligible is
+      * dropped and counted in plan.json, never replaced.
       *
       * Writes `<work_dir>/<label>/plan.json` (stars, both search configs,
       * the summary fields) and the chunks. The search config is the CLI's
@@ -159,6 +162,7 @@ namespace tess.stitch {
         seed: Int = 1,
         holdout_of: Json = [],
         sample_of: Json = [],
+        stars: Json = [],
         set: Json = [],
         chunk_size: Int = 6,
         bin_minutes: Double = 10.0,
@@ -445,6 +449,7 @@ namespace tess.workflows {
         seed: Int = 1,
         holdout_of: Json = [],
         sample_of: Json = [],
+        stars: Json = [],
         set: Json = [],
         chunk_size: Int = 6,
         workers: Int = 3,
@@ -464,7 +469,7 @@ namespace tess.workflows {
             sectors = $.sectors, manifest_paths = lists.paths, tce_path = tce.path,
             work_dir = $.work_dir, label = $.label, min_sectors = $.min_sectors,
             n_tce = $.n_tce, n_quiet = $.n_quiet, seed = $.seed, holdout_of = $.holdout_of,
-            sample_of = $.sample_of, set = $.set, chunk_size = $.chunk_size
+            sample_of = $.sample_of, stars = $.stars, set = $.set, chunk_size = $.chunk_size
         )
         searched = StitchSearchEach(chunks = plan.chunks, workers = $.workers, width = $.width)
         obs = tess.stitch.Match(
