@@ -92,6 +92,31 @@ class TOI:
         )
 
 
+TOIS_CSV_FIELDS = [
+    "toi",
+    "tic_id",
+    "disposition",
+    "planet_like",
+    "tce_backed",
+    "spoc_snr",
+    "epoch_source",
+    "epoch_sigma_h",
+    "epoch_uncertain",
+    "pipelines",
+    "period_days",
+    "duration_hours",
+    "depth_ppm",
+    "forced_n_transits",
+    "forced_snr",
+    "outcome",
+    "alias",
+    "sig_period",
+    "sig_snr",
+    "epoch_offset_h",
+    "error",
+]
+
+
 def _float(v: str | None) -> float | None:
     return float(v) if v and v.strip() else None
 
@@ -409,7 +434,9 @@ def main(argv: list[str] | None = None) -> int:
                 "error": "" if r["ok"] else r["error"],
             })  # fmt: skip
     with (args.out / "tois.csv").open("w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(out_rows[0]))
+        # A fixed header, not the first row's keys: a sector no TOI lists
+        # yet (the catalogue lags by months) has no rows at all.
+        w = csv.DictWriter(fh, fieldnames=TOIS_CSV_FIELDS)
         w.writeheader()
         w.writerows(out_rows)
 

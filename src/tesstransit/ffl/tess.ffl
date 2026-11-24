@@ -263,7 +263,7 @@ namespace tess.workflows {
     facet SearchEach(
         chunks: Json, prewhiten: Boolean, workers: Int, width: Int,
         invert: Boolean = false, set: Json = []
-    ) => (results: Json)
+    ) => (results: [String])
         andThen foreach c in $.chunks limit $.width {
             one = tess.SearchChunk(
                 chunk_path = $.c, prewhiten = $.prewhiten, workers = $.workers,
@@ -334,7 +334,7 @@ namespace tess.workflows {
         n_tce: Int,
         n_quiet: Int,
         seed: Int
-    ) => (planets: Json, samples: Json, failed: Json)
+    ) => (planets: [String], samples: [String], failed: [Long])
         andThen foreach s in $.sectors limit $.sector_width {
             tce = tess.source.TCETable(sector = $.s, dest_dir = $.work_dir)
             targets = tess.source.Targets(sector = $.s, dest_dir = $.work_dir ++ "/lc")
@@ -415,7 +415,7 @@ namespace tess.workflows {
         )
     }
     /** The light-curve list of every sector, `width` at a time. */
-    facet ManifestEach(sectors: Json, dest_dir: String, width: Int) => (paths: Json)
+    facet ManifestEach(sectors: Json, dest_dir: String, width: Int) => (paths: [String])
         andThen foreach s in $.sectors limit $.width {
             t = tess.source.Targets(sector = $.s, dest_dir = $.dest_dir)
             yield ManifestEach(paths += t.path)
@@ -423,7 +423,7 @@ namespace tess.workflows {
 
     /** Every stitched chunk, `width` at a time (0 = unbounded): the fan-out
       * that spreads a run over the fleet. */
-    facet StitchSearchEach(chunks: Json, workers: Int, width: Int) => (observed: Json, inverted: Json)
+    facet StitchSearchEach(chunks: Json, workers: Int, width: Int) => (observed: [String], inverted: [String])
         andThen foreach c in $.chunks limit $.width {
             one = tess.stitch.SearchChunk(chunk_path = $.c, workers = $.workers)
             yield StitchSearchEach(observed += one.results_path, inverted += one.inverted_path)
@@ -496,7 +496,7 @@ namespace tess.workflows {
         n_tce: Int,
         n_quiet: Int,
         seed: Int
-    ) => (samples: Json, failed: Json)
+    ) => (samples: [String], failed: [Long])
         andThen foreach s in $.sectors limit $.sector_width {
             tce = tess.source.TCETable(sector = $.s, dest_dir = $.work_dir)
             targets = tess.source.Targets(sector = $.s, dest_dir = $.work_dir ++ "/lc")
@@ -546,7 +546,7 @@ namespace tess.workflows {
     facet InjectEach(
         samples: Json, work_dir: String, per_star: Int, seed: Int, workers: Int,
         width: Int, prewhiten: Boolean, set: Json
-    ) => (runs: Json, injections: Json, found: Json)
+    ) => (runs: [String], injections: [Long], found: [Long])
         andThen foreach a in $.samples limit $.width {
             one = tess.check.Inject(
                 sample = $.a, tce_dir = $.work_dir, lc_dir = $.work_dir ++ "/lc",

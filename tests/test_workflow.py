@@ -299,3 +299,27 @@ def test_stitch_tce_url_finds_the_multi_sector_table():
     assert h.tce_url(1, page, last=39).endswith("s0001-s0039_dvr-tcestats.csv")
     with pytest.raises(ValueError, match="sectors 1-13"):
         h.tce_url(1, page, last=13)
+
+
+def test_sector_with_no_toi_completes_empty(inputs):
+    """A sector no TOI lists yet plans zero chunks, and the run still completes.
+
+    Found live on sector 108 (2026-11-23): the TOI catalogue lagged the
+    sector, the planet plan had no stars, the foreach ran zero times, and
+    with `results: Json` nothing was ever yielded, so MatchSector's
+    `searched.results` failed with "Attribute not found". Declared as an
+    array, the runtime materializes it as [] instead.
+    """
+    later = Path(inputs["toi_path"]).with_name("tois-later.csv")
+    later.write_text(
+        TOI_CSV.splitlines()[0] + '\n99,103.01,PC,1325.0,5.0,2.0,800,"[2]",SPOC\n'
+    )
+    out, ran = run(
+        "tess.workflows.SectorRun",
+        {**inputs, "toi_path": str(later), "kind": "planets"},
+        HANDLERS,
+    )
+    assert "tess.SearchChunk" not in ran
+    assert out["stars"] == 0
+    summary = json.loads(Path(out["run_dir"], "summary.json").read_text())
+    assert summary["sector"] == 1
