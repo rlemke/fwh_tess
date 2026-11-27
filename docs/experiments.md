@@ -1648,3 +1648,66 @@ So the follow-up removed two of the eight (TOI-1408 c is known; TIC 177308364
 is a grid-edge artefact) and explained a third (TOI-1742's extra dips do not
 repeat). What remains unexplained is small: a 0.48 d, 241 ppm signal on
 TOI-1610's star, found five years apart.
+
+
+## Nearby M dwarfs, sectors 1-96 stitched (2026-11-24 to 11-27)
+
+**Sample.** The 300 nearest M dwarfs (Gaia DR3, parallax > 25 mas, BP-RP > 1.8,
+all within 22.6 pc) with 2-min data in at least 3 of sectors 1-96 and no TOI,
+CTOI or confirmed planet (`tools/nearby/`, `docs/data/nearby-mdwarfs-300.json`).
+Median 4 sectors over a median 4 years. 48 have a SPOC multi-sector (s1-96)
+TCE; 252 have none. Fleet run `nearby-m300` / `nearby-m300-inv`, the stitched
+defaults (SDE 18), 65 h.
+
+| stars without a TCE (252) | as observed | upside down |
+|---|---|---|
+| stars with a signal | 82 | 83 |
+| signals | 194 | 167 |
+| SDE >= 40 | 52 | 45 |
+| SDE >= 60 | 29 | 24 |
+
+A third of the quiet stars give a signal upside down, against 7-10% in every
+earlier stitched sample. No SDE cut separates the two passes. They differ by
+PERIOD: of the signals with nothing at the same period in the other pass, the
+observed ones are at 1-2 d (107 of 140), most with a 4 h box, and several stars
+share a period (1.03, 1.15, 1.38 d); the inverted ones at 10-30 d (79 of 120)
+with 3-6 events. A 4 h transit at 1-2 d needs a star of density 0.1 ρ☉ (the
+default floor); an M dwarf is 2.5-20 ρ☉, where the longest transit at 1.5 d is
+0.9-1.8 h. The inverted few-event signals are flares, which a dip search only
+sees upside down. 12 of the 125 SPOC TCEs on the 48 TCE stars were found; 41
+are below the 1 d grid.
+
+**The two strongest candidates, followed up on the stitched curve** (54 tier B
+-> 27 at a period no other star shows within 0.2% -> 14 with a box no longer
+than 1.5x an M dwarf allows):
+- **TIC 350328524** (1.505 d, 1015 ppm, 47 events, sectors 45, 46, 72): the
+  depth is not stable, 515 ± 184, 1203 ± 201 and 336 ± 194 ppm in the three
+  sectors (χ² 10.7 for 2 degrees of freedom), and in the fold the "transit" is
+  one bin among several of the same size: red noise. Searched again with the
+  changes below it gives nothing.
+- **TIC 258054702** (1.166 d, 480 ppm): the fold has a second dip of 338 ± 51
+  ppm at phase 0.5, so the period is 0.583 d, below the grid. Searched from
+  0.3 d: 0.58334 d, SNR 9.5, SDE 31.6, 103 events, nothing upside down, the
+  same unbinned and at 7- or 10-min bins. But folded at 0.58334 d it has three
+  dips per cycle (phases 0, 0.35, 0.67; 400, 230 and 315 ppm) in both seasons:
+  periodic variability, not a transit.
+
+So neither is a planet.
+
+**Two changes.** `min_stellar_density_solar=2.5` (an M0 dwarf; the duration
+cap at 1 d becomes 1.8 h) and a new option, `flare_clip_sigma` (see the
+field's comment), at 3.5 with 20 min after each flare. Searched again locally
+with both, the observed 1-2 d signals on TIC 416740234 (three, SDE 21-49),
+25896647 and 350328524 are gone, as are the inverted few-event signals on TIC
+1250913 (three) and 25896647. Not free: TIC 350328524 now gives three inverted
+signals at 7.8-14.5 d, which neither change gives alone.
+
+**Fixed before running** (`nearby-m300-v2`, `nearby-m300-v2-inv`): both
+changes, everything else as `nearby-m300`, on the same 300 stars plus a
+control of the 48 M dwarfs within 40 pc with 3+ sectors in 1-96 and a TOI or
+confirmed planet. Adopt for the remaining ~1,950 nearby M dwarfs only if
+(a) at most 25 of the 252 quiet stars give an inverted signal (10%, against 83),
+and (b) every planet TOI (CP/KP/PC) on the control stars with a period in the
+grid and at least 3 transits in the data is found (a period alias counts).
+If (a) passes, the observed count is compared with the inverted one; only an
+excess would say there is anything to find.

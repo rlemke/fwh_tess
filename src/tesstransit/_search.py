@@ -121,6 +121,22 @@ class SearchConfig:
     # long-period false alarms lay within 0.5 d of an edge, where 9.7% of the
     # data is, four at the start of sector 7 (experiments.md, 2026-11-07).
     edge_trim_days: float = 0.0
+    # Flare removal before the stitched search (0 = off). M dwarfs flare: a
+    # sharp brightening that decays over minutes. As observed a dip search
+    # never sees one, but upside down a flare is a dip, so on active stars the
+    # inverted pass fills with few-event signals the observed pass cannot have,
+    # and stops measuring the observed pass's false alarms. Measured reason: on
+    # 252 nearby M dwarfs with no TCE (nearby-m300), lone inverted signals sat
+    # at 10-30 d with 3-6 events (79 of 120), lone observed ones at 1-2 d.
+    # Each sector, on the flux AS OBSERVED (before any inversion), is divided
+    # by a 6 h running median; points more than flare_clip_sigma robust sigmas
+    # ABOVE it are dropped, with one cadence before and flare_clip_after_minutes
+    # after each (the decay). Transits only dim, so they are never dropped.
+    # ⚠️ One-sided on purpose, and not free: the inverted pass also loses the
+    # upper noise tail, which becomes its lower tail. At 3.5 sigma that is
+    # ~0.02% of white-noise points, far below one transit's worth of SNR.
+    flare_clip_sigma: float = 0.0
+    flare_clip_after_minutes: float = 20.0
     # Both-directions test (0 = off). A transit only dims; periodic stellar
     # variability is about as bright at its crest as it is faint at its
     # trough. So fold at the signal's period and find the strongest
@@ -243,6 +259,10 @@ class SearchConfig:
             raise ValueError("min_snr_without_two_strongest must be >= 0 (0 = off)")
         if self.edge_trim_days < 0:
             raise ValueError("edge_trim_days must be >= 0 (0 = off)")
+        if self.flare_clip_sigma < 0 or self.flare_clip_after_minutes < 0:
+            raise ValueError(
+                "flare_clip_sigma and flare_clip_after_minutes must be >= 0"
+            )
         if self.opposite_snr_ratio < 0:
             raise ValueError("opposite_snr_ratio must be >= 0 (0 = off)")
         if not 0 <= self.coherent_veto_fap < 1:

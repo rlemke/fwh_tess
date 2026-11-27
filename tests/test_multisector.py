@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from tesstransit import _lightcurve as lc
 from tesstransit import _search as sr
@@ -77,3 +78,33 @@ def test_a_stitch_longer_than_a_year_raises_the_sde_threshold():
         ms.base_config(sectors=long).override(["sde_threshold=13"]).sde_threshold
         == 13.0
     )
+
+
+def _flares(t: np.ndarray, times: list[float], amp: float = 0.02) -> np.ndarray:
+    """Flares: an instant rise, then a 5-minute exponential decay."""
+    f = np.zeros_like(t)
+    for t0 in times:
+        after = t >= t0
+        f[after] += amp * np.exp(-(t[after] - t0) * 1440.0 / 5.0)
+    return f
+
+
+def test_flare_mask_drops_flares_and_their_decay_but_never_a_transit():
+    rng = np.random.default_rng(7)
+    t = np.arange(1325.0, 1352.0, 2.0 / 1440.0)
+    transit = _box(t, 3.3, 1326.0, 1.0, 3000.0)  # 3000 ppm, 1 h, every 3.3 d
+    f = 1.0 + rng.normal(0, 4e-4, len(t)) + transit + _flares(t, [1330.0, 1341.5])
+    m = ms.flare_mask(t, f, 3.5, 20.0)
+    for t0 in (1330.0, 1341.5):
+        near = (t >= t0) & (t <= t0 + 20.0 / 1440.0)
+        assert m[near].all()
+    assert not m[transit < 0].any()
+    assert m.mean() < 0.01
+
+
+def test_flare_clip_is_off_by_default_and_validated():
+    assert sr.SearchConfig().flare_clip_sigma == 0.0
+    with pytest.raises(ValueError, match="flare_clip"):
+        sr.SearchConfig(flare_clip_sigma=-1.0).validate()
+    cfg = sr.SearchConfig().override(["flare_clip_sigma=3.5"])
+    assert cfg.flare_clip_sigma == 3.5

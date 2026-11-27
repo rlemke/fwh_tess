@@ -61,6 +61,7 @@ the exact search that produced it.
 | `power_detrend_frac` | 0.042 | Width of the running median subtracted from the periodogram before `sde` is measured, as a fraction of the period grid. |
 | `durations_hours` | 0.5, 1, 2, 3, 4, 6, 8 | Trial transit durations (box widths). |
 | `min_stellar_density_solar` | 0.1 | Caps the duration tried at each period at the longest a transit could physically last around a star at least this dense (circular orbit, central transit): **T_max ≈ 13 h × (P / 1 yr)^⅓ × (ρ / ρ☉)^−⅓**. At 0.1 ρ☉: 3.9 h at 1 d, 9.2 h at 13 d. Admits subgiants, excludes giants. |
+| `flare_clip_sigma` | 0 (off) | Stitched search only. Each sector, as observed (before any inversion), is divided by a 6 h running median, and points more than this many robust sigmas ABOVE it are dropped, with one cadence before and `flare_clip_after_minutes` (20) after. A flare is a dip upside down, so without this the inverted pass of a flaring M dwarf fills with few-event false alarms. One-sided on purpose: transits only dim. |
 | `snr_threshold` | 7.1 | Minimum `snr` to report a signal. Numerically SPOC's MES threshold; **not the same statistic**. |
 | `sde_threshold` | 11.0 | Minimum `sde` to report a signal. Measured on real light curves (inverted search, sectors 1-13): 14.0% of no-TCE stars give a false alarm at this cut; see experiments.md, "False-alarm rate". |
 | `max_signals` | 3 | Stop after this many signals per star. |

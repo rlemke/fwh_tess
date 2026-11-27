@@ -120,6 +120,32 @@ def stitch(
     return t, f, per
 
 
+def flare_mask(
+    time: np.ndarray, flux: np.ndarray, sigma: float, after_minutes: float
+) -> np.ndarray:
+    """True where a point belongs to a flare (see SearchConfig.flare_clip_sigma).
+
+    ``flux`` is one sector AS OBSERVED: a flare is a brightening there.
+    """
+    trend = sr.running_median(time, flux, 0.25)
+    r = flux / trend - 1.0
+    ok = np.isfinite(r)
+    if ok.sum() < 10:
+        return np.zeros(len(time), dtype=bool)
+    med = np.median(r[ok])
+    s = 1.4826 * np.median(np.abs(r[ok] - med))
+    hot = np.flatnonzero(ok & (r - med > sigma * s))
+    if hot.size == 0:
+        return np.zeros(len(time), dtype=bool)
+    cadence = float(np.median(np.diff(time)))
+    lo = np.searchsorted(time, time[hot] - 1.5 * cadence, side="left")
+    hi = np.searchsorted(time, time[hot] + after_minutes / 1440.0, side="right")
+    edges = np.zeros(len(time) + 1, dtype=np.int64)
+    np.add.at(edges, lo, 1)
+    np.add.at(edges, hi, -1)
+    return np.cumsum(edges[:-1]) > 0
+
+
 def stitched_config(
     cfg: sr.SearchConfig, baseline_days: float, min_period_days: float
 ) -> sr.SearchConfig:
@@ -205,6 +231,15 @@ def search_star_passes(
             paths.append(path)
             curves.append(lc.load_lc(path))
         t_fetch = time.time() - t0
+        clips = {(c.flare_clip_sigma, c.flare_clip_after_minutes) for c in cfgs}
+        if len(clips) != 1:
+            raise ValueError("the passes of one star must clip flares the same way")
+        (clip_sigma, clip_after), flares = clips.pop(), {}
+        if clip_sigma > 0:
+            for c in curves:  # as observed, before any pass inverts it
+                m = flare_mask(c.time, c.flux, clip_sigma, clip_after)
+                flares[c.sector] = int(m.sum())
+                c.time, c.flux, c.flux_err = c.time[~m], c.flux[~m], c.flux_err[~m]
         flux = [c.flux.copy() for c in curves]
         out = []
         for cfg in cfgs:
@@ -226,6 +261,7 @@ def search_star_passes(
                 "sectors": per,
                 "baseline_days": baseline,
                 "n_binned": len(t),
+                "flare_points": flares,
                 "seconds": {"fetch": t_fetch, "total": t_fetch + time.time() - t1},
             })  # fmt: skip
         if not keep:
